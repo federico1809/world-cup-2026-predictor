@@ -7,9 +7,11 @@ The same national team appears with different names depending on the source:
     - Kaggle results: "South Korea"
     - FIFA Rankings:  "Korea Republic"
     - StatsBomb:      "South Korea"
-    - Transfermarkt:  "Südkorea"
 
-All names are normalized to a single FIFA official canonical name.
+Strategy:
+    - Only names that DIFFER between datasets need an alias entry.
+    - Names that are consistent across datasets pass through unchanged.
+    - WARNING is only logged for genuinely ambiguous/unknown cases.
 
 Usage:
     from world_cup_2026.data_ingestion.normalize import normalize_team_name
@@ -19,144 +21,181 @@ Usage:
 from loguru import logger
 
 # ---------------------------------------------------------------------------
-# Master alias dictionary
-# key   = any known alias (lowercase for matching)
-# value = FIFA canonical name (official English)
+# Alias dictionary — ONLY cross-dataset conflicts go here
+# key   = alias as it appears in ONE source (lowercase)
+# value = canonical name used consistently across most sources
 # ---------------------------------------------------------------------------
 
 _TEAM_ALIASES: dict[str, str] = {
-    # --- Asia ---
-    "south korea": "Korea Republic",
-    "korea republic": "Korea Republic",
-    "korea, republic of": "Korea Republic",
-    "korea rep.": "Korea Republic",
-    "north korea": "Korea DPR",
-    "korea dpr": "Korea DPR",
-    "korea, dem. people's rep.": "Korea DPR",
-    "iran": "IR Iran",
-    "ir iran": "IR Iran",
-    "islamic republic of iran": "IR Iran",
-    "china": "China PR",
-    "china pr": "China PR",
-    "china, pr": "China PR",
-    "chinese taipei": "Chinese Taipei",
-    "taiwan": "Chinese Taipei",
-    "uae": "United Arab Emirates",
-    "united arab emirates": "United Arab Emirates",
-    "syria": "Syria",
-    "kyrgyzstan": "Kyrgyz Republic",
-    "kyrgyz republic": "Kyrgyz Republic",
+    # Korea
+    "korea republic":               "South Korea",
+    "korea, republic of":           "South Korea",
+    "korea rep.":                   "South Korea",
+    "north korea":                  "Korea DPR",
+    "korea dpr":                    "Korea DPR",
+    "korea, dem. people's rep.":    "Korea DPR",
 
-    # --- Europe ---
-    "england": "England",
-    "scotland": "Scotland",
-    "wales": "Wales",
-    "northern ireland": "Northern Ireland",
-    "czech republic": "Czechia",
-    "czechia": "Czechia",
-    "the czech republic": "Czechia",
-    "slovak republic": "Slovakia",
-    "slovakia": "Slovakia",
-    "russia": "Russia",
-    "russian federation": "Russia",
-    "turkey": "Türkiye",
-    "türkiye": "Türkiye",
-    "turkiye": "Türkiye",
-    "north macedonia": "North Macedonia",
-    "macedonia": "North Macedonia",
-    "republic of north macedonia": "North Macedonia",
-    "bosnia and herzegovina": "Bosnia & Herzegovina",
-    "bosnia & herzegovina": "Bosnia & Herzegovina",
-    "bosnia-herzegovina": "Bosnia & Herzegovina",
-    "netherlands": "Netherlands",
-    "holland": "Netherlands",
-    "germany": "Germany",
-    "west germany": "Germany",
+    # Iran
+    "ir iran":                      "Iran",
+    "islamic republic of iran":     "Iran",
 
-    # --- Americas ---
-    "usa": "United States",
-    "united states": "United States",
-    "united states of america": "United States",
-    "us": "United States",
-    "trinidad & tobago": "Trinidad and Tobago",
-    "trinidad and tobago": "Trinidad and Tobago",
-    "saint kitts and nevis": "St. Kitts and Nevis",
-    "st. kitts and nevis": "St. Kitts and Nevis",
-    "saint vincent and the grenadines": "St. Vincent and the Grenadines",
-    "st. vincent and the grenadines": "St. Vincent and the Grenadines",
-    "antigua and barbuda": "Antigua and Barbuda",
-    "curacao": "Curaçao",
-    "curaçao": "Curaçao",
+    # China
+    "china pr":                     "China",
+    "china, pr":                    "China",
 
-    # --- Africa ---
-    "ivory coast": "Côte d'Ivoire",
-    "cote d'ivoire": "Côte d'Ivoire",
-    "côte d'ivoire": "Côte d'Ivoire",
-    "cape verde": "Cape Verde",
-    "cape verde islands": "Cape Verde",
+    # Turkey
+    "türkiye":                      "Turkey",
+    "turkiye":                      "Turkey",
+
+    # Czechia
+    "czech republic":               "Czechia",
+    "the czech republic":           "Czechia",
+
+    # Slovakia
+    "slovak republic":              "Slovakia",
+
+    # North Macedonia
+    "north macedonia":              "North Macedonia",
+    "macedonia":                    "North Macedonia",
+    "republic of north macedonia":  "North Macedonia",
+
+    # Bosnia
+    "bosnia and herzegovina":       "Bosnia-Herzegovina",
+    "bosnia & herzegovina":         "Bosnia-Herzegovina",
+
+    # USA
+    "united states":                "USA",
+    "united states of america":     "USA",
+
+    # Trinidad
+    "trinidad & tobago":            "Trinidad and Tobago",
+
+    # Ivory Coast
+    "ivory coast":                  "Côte d'Ivoire",
+    "cote d'ivoire":                "Côte d'Ivoire",
+
+    # DR Congo
     "democratic republic of the congo": "DR Congo",
-    "dr congo": "DR Congo",
-    "congo dr": "DR Congo",
-    "republic of the congo": "Congo",
-    "congo": "Congo",
-    "tanzania": "Tanzania",
-    "united republic of tanzania": "Tanzania",
-    "equatorial guinea": "Equatorial Guinea",
-    "swaziland": "Eswatini",
-    "eswatini": "Eswatini",
+    "congo dr":                     "DR Congo",
 
-    # --- Oceania ---
-    "new zealand": "New Zealand",
-    "aotearoa new zealand": "New Zealand",
-    "tahiti": "Tahiti",
-    "papua new guinea": "Papua New Guinea",
+    # Eswatini
+    "swaziland":                    "Eswatini",
+
+    # Kyrgyzstan
+    "kyrgyzstan":                   "Kyrgyz Republic",
+
+    # UAE
+    "uae":                          "United Arab Emirates",
+
+    # Russia
+    "russian federation":           "Russia",
+
+    # Germany (historical)
+    "west germany":                 "Germany",
+
+    # Republic of Ireland
+    "republic of ireland":          "Ireland",
+
+    # Curaçao
+    "curaçao": "Curacao",
 }
 
-# Build a reverse lookup: canonical → canonical (for names already correct)
-_CANONICAL_NAMES = set(_TEAM_ALIASES.values())
+# Names that are already canonical — no transformation, no warning
+# This is the complete set of names used consistently across our datasets
+_PASSTHROUGH_NAMES: frozenset[str] = frozenset({
+    "afghanistan", "albania", "algeria", "andorra", "angola",
+    "argentina", "armenia", "australia", "austria", "azerbaijan",
+    "bahrain", "bangladesh", "belgium", "bolivia", "botswana",
+    "brazil", "bulgaria", "burkina faso", "burundi", "cabo verde",
+    "cambodia", "cameroon", "canada", "chile", "china", "colombia",
+    "comoros", "costa rica", "croatia", "cuba", "cyprus", "czechia",
+    "denmark", "djibouti", "ecuador", "egypt", "el salvador",
+    "england", "eritrea", "estonia", "ethiopia", "fiji", "finland",
+    "france", "gabon", "georgia", "germany", "ghana", "gibraltar",
+    "greece", "guatemala", "guinea", "guinea-bissau", "guyana",
+    "haiti", "honduras", "hungary", "iceland", "india", "indonesia",
+    "iran", "iraq", "ireland", "israel", "italy", "jamaica", "japan",
+    "jordan", "kazakhstan", "kenya", "kosovo", "kuwait", "latvia",
+    "lebanon", "lesotho", "liberia", "libya", "liechtenstein",
+    "lithuania", "luxembourg", "madagascar", "malawi", "malaysia",
+    "maldives", "mali", "malta", "mauritania", "mauritius", "mexico",
+    "moldova", "mongolia", "montenegro", "morocco", "mozambique",
+    "myanmar", "namibia", "nepal", "netherlands", "new zealand",
+    "nicaragua", "niger", "nigeria", "north korea", "northern ireland",
+    "norway", "oman", "pakistan", "palestine", "panama", "paraguay",
+    "peru", "philippines", "poland", "portugal", "qatar", "romania",
+    "russia", "rwanda", "san marino", "saudi arabia", "scotland",
+    "senegal", "serbia", "singapore", "slovakia", "slovenia",
+    "somalia", "south africa", "south korea", "south sudan", "spain",
+    "sri lanka", "sudan", "suriname", "sweden", "switzerland",
+    "tajikistan", "tanzania", "thailand", "togo", "tunisia",
+    "turkey", "turkmenistan", "uganda", "ukraine", "uruguay",
+    "usa", "uzbekistan", "venezuela", "vietnam", "wales",
+    "yemen", "zambia", "zimbabwe",
+    # WC2026 specific
+    "curaçao", "côte d'ivoire", "dr congo", "eswatini",
+    "north macedonia", "bosnia-herzegovina", "kyrgyz republic",
+    "united arab emirates", "trinidad and tobago",
+    "ir iran", "korea republic", "algeria", "austria", "jordan",
+    "colombia", "ecuador", "ghana", "panama", "croatia",
+    "norway", "senegal", "uzbekistan", "cabo verde",
+    "american samoa", "anguilla", "antigua and barbuda", "aruba",
+    "bahamas", "barbados", "belarus", "belize", "benin", "bermuda",
+    "bhutan", "british virgin islands", "brunei darussalam",
+    "cayman islands", "central african republic", "chad",
+    "chinese taipei", "congo", "cook islands", "curacao",
+    "czechoslovakia", "dominica", "dominican republic",
+    "equatorial guinea", "faroe islands", "grenada", "guam",
+    "hong kong", "laos", "macau", "montserrat",
+    "netherlands antilles", "new caledonia", "papua new guinea",
+    "puerto rico", "samoa", "sao tome and principe",
+    "serbia and montenegro", "seychelles", "sierra leone",
+    "solomon islands", "st kitts and nevis", "st lucia",
+    "st vincent and the grenadines", "syria", "tahiti",
+    "the gambia", "timor-leste", "tonga",
+    "turks and caicos islands", "us virgin islands",
+    "vanuatu", "yugoslavia", "zaire",
+})
 
 
 def normalize_team_name(name: str) -> str:
-    """Normalize a team name to its FIFA canonical form.
+    """Normalize a team name to its canonical form.
 
     Args:
         name: Raw team name string from any data source.
 
     Returns:
-        FIFA canonical team name. If not found in the dictionary,
-        returns the original name with a warning logged.
+        Canonical team name. Passthrough if already canonical.
+        WARNING only for genuinely unknown names.
     """
     if not isinstance(name, str):
         return name
 
-    key = name.strip().lower()
-    normalized = _TEAM_ALIASES.get(key)
+    stripped = name.strip()
+    key = stripped.lower()
 
-    if normalized:
-        return normalized
+    # Level 1 — explicit alias (cross-dataset conflict resolution)
+    if key in _TEAM_ALIASES:
+        return _TEAM_ALIASES[key]
 
-    # If it's already a canonical name (exact match, case-insensitive)
-    for canonical in _CANONICAL_NAMES:
-        if key == canonical.lower():
-            return canonical
+    # Level 2 — already canonical or known consistent name, passthrough silently
+    if key in _PASSTHROUGH_NAMES:
+        return stripped
 
-    # Not found — return as-is but log for manual review
-    logger.warning(f"Team name not in alias dictionary: '{name}' — returning as-is.")
-    return name
+    # Level 3 — unknown, return as-is but warn for manual review
+    logger.warning(f"Unknown team name: '{stripped}' — add to normalize.py if needed.")
+    return stripped
 
 
-def normalize_dataframe_teams(
-    df,
-    columns: list[str],
-) -> object:
-    """Apply normalize_team_name to one or more columns of a DataFrame.
+def normalize_dataframe_teams(df, columns: list[str]):
+    """Apply normalize_team_name to one or more DataFrame columns.
 
     Args:
-        df: pandas DataFrame containing team name columns.
+        df: pandas DataFrame.
         columns: List of column names to normalize.
 
     Returns:
-        DataFrame with normalized team name columns (copy, not in-place).
+        Copy of DataFrame with normalized team name columns.
     """
     df = df.copy()
     for col in columns:
@@ -164,5 +203,5 @@ def normalize_dataframe_teams(
             df[col] = df[col].map(normalize_team_name)
             logger.info(f"Normalized column: '{col}'")
         else:
-            logger.warning(f"Column '{col}' not found in DataFrame — skipping.")
+            logger.warning(f"Column '{col}' not found — skipping.")
     return df
