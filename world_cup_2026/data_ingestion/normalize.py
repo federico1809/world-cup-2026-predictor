@@ -98,6 +98,9 @@ _TEAM_ALIASES: dict[str, str] = {
 
     # Curaçao
     "curaçao": "Curacao",
+
+    # Cabo Verde
+    "cabo verde":    "Cape Verde",
 }
 
 # Names that are already canonical — no transformation, no warning
@@ -154,7 +157,7 @@ _PASSTHROUGH_NAMES: frozenset[str] = frozenset({
     "st vincent and the grenadines", "syria", "tahiti",
     "the gambia", "timor-leste", "tonga",
     "turks and caicos islands", "us virgin islands",
-    "vanuatu", "yugoslavia", "zaire",
+    "vanuatu", "yugoslavia", "zaire", "cape verde"
 })
 
 
