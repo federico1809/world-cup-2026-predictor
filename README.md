@@ -1,6 +1,7 @@
 ﻿# ⚽ FIFA World Cup 2026 Predictor
 
-> End-to-end machine learning pipeline for predicting FIFA World Cup 2026 match outcomes and final standings using ensemble models, Monte Carlo simulation, and unsupervised clustering.
+> End-to-end machine learning pipeline for predicting FIFA World Cup 2026 outcomes
+> using ensemble models, Monte Carlo simulation, and unsupervised clustering.
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -8,56 +9,67 @@
 
 ---
 
-## 🎯 Project Goal
+## 🎯 What This Project Predicts
 
-Predict the FIFA World Cup 2026 results at three levels of granularity:
+| Level | Output |
+|-------|--------|
+| Match | Win / Draw / Loss probability per match |
+| Group stage | Final standings + classification probabilities |
+| Knockout bracket | How R16 fixture assembles from group results |
+| Phase advancement | P(reach R16 / QF / SF / Final / Win) per team |
+| Tournament winner | Full probability distribution for all 48 teams |
 
-1. **Match level** — Win / Draw / Loss probability for each of the 104 matches
-2. **Group stage** — Classification probabilities for all 12 groups
-3. **Tournament** — Final standings with confidence intervals via 10,000 Monte Carlo simulations
+### Adaptive retraining strategy
+
+The model is designed for real-time use during the tournament:
+
+- Pre-tournament: predict all 104 matches end-to-end via Monte Carlo
+- After group stage: retrain on actual group results, predict knockout phase
+- After each round: incorporate new results, update remaining predictions
+
+Final presentation: FiveThirtyEight-style probability table + Streamlit interactive
+dashboard + static notebook visualizations.
 
 ---
 
 ## 🧠 Key Design Principles
 
-- **Recent form over historical reputation** — a team's last 20 matches matter infinitely more than their 1970 World Cup title. All features are computed with temporal awareness.
-- **No data leakage** — features are computed strictly as of each match date. No future information bleeds into training.
-- **Strict temporal split** — train/val/test split by date, never random.
-- **Calibrated probabilities** — model outputs are probability-calibrated to feed Monte Carlo simulation reliably.
+- Recent form over historical reputation — Brazil's 1970 title does not predict 2026.
+  All features computed with strict temporal awareness.
+- No data leakage — features computed strictly as of each match date.
+- Strict temporal split — train/val/test by date, never random.
+- Calibrated probabilities — outputs calibrated for reliable Monte Carlo input.
+- Unsupervised methods inform supervised — clustering of 48 qualified teams generates
+  categorical features; PCA detects multicollinearity.
+- Adaptive pipeline — model retrained mid-tournament with real results.
 
 ---
 
 ## 📁 Project Structure
-`
-world-cup-2026-predictor/
-│
-├── configs/              # Global parameters (seeds, paths, hyperparameters)
-├── data/
-│   ├── raw/              # Downloaded datasets (never modified)
-│   ├── interim/          # Intermediate transformations
-│   ├── processed/        # Model-ready feature matrices
-│   └── external/         # StatsBomb events, third-party sources
-│
-├── models/               # Serialized trained models and encoders
-├── notebooks/
-│   ├── 01_eda/           # Exploratory Data Analysis
-│   ├── 02_features/      # Feature Engineering
-│   ├── 03_unsupervised/  # Clustering and PCA
-│   ├── 04_modeling/      # Supervised modeling and evaluation
-│   └── 05_simulation/    # Monte Carlo tournament simulation
-│
-├── outputs/
-│   ├── figures/          # Generated plots
-│   └── predictions/      # Tournament simulation results
-│
-├── world_cup_2026/       # Source package
-│   ├── data_ingestion/   # Download pipeline and normalization
-│   ├── features/         # Feature engineering modules
-│   ├── modeling/         # Training and inference
-│   └── simulation/       # Monte Carlo engine
-│
-└── tests/                # Unit tests
-`
+
+    world-cup-2026-predictor/
+    ├── configs/                  Global parameters (seeds, paths, hyperparameters)
+    ├── data/
+    │   ├── raw/                  Downloaded datasets (never modified)
+    │   ├── interim/              Intermediate transformations
+    │   ├── processed/            Model-ready feature matrices
+    │   └── external/             StatsBomb events, third-party sources
+    ├── models/                   Serialized trained models and encoders
+    ├── notebooks/
+    │   ├── 01_eda/               Exploratory Data Analysis
+    │   ├── 02_features/          Feature Engineering
+    │   ├── 03_unsupervised/      Clustering and PCA
+    │   ├── 04_modeling/          Supervised modeling and evaluation
+    │   └── 05_simulation/        Monte Carlo tournament simulation
+    ├── outputs/
+    │   ├── figures/              Generated plots (gitignored)
+    │   └── predictions/          Tournament simulation results
+    ├── world_cup_2026/
+    │   ├── data_ingestion/       Download pipeline and normalization
+    │   ├── features/             Elo, H2H, form feature modules
+    │   ├── modeling/             Training and inference
+    │   └── simulation/           Monte Carlo engine
+    └── tests/
 
 ---
 
@@ -65,31 +77,45 @@ world-cup-2026-predictor/
 
 | Source | Description | Period | Size |
 |--------|-------------|--------|------|
-| [martj42 — International Results](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017) | All international match results | 1872–2026 | 49,071 matches |
-| [patateriedata — Daily Updates](https://www.kaggle.com/datasets/patateriedata/all-international-football-results) | Results with daily updates incl. qualifiers | 1872–2026 | 51,384 matches |
-| [lchikry — Match Features](https://www.kaggle.com/datasets/lchikry/international-football-match-features-and-statistics) | Pre-calculated Elo, form, FIFA ratings | 1872–2025 | 43,364 × 35 features |
-| [joshfjelstul — World Cup DB](https://www.kaggle.com/datasets/joshfjelstul/world-cup-database) | Relational WC database | 1930–2022 | 900 matches |
-| [cashncarry — FIFA Rankings](https://www.kaggle.com/datasets/cashncarry/fifaworldranking) | Monthly FIFA rankings | 1992–2024 | 67,472 records |
-| [sarazahran1 — Elo Baseline](https://www.kaggle.com/datasets/sarazahran1/wc2026-match-probability-baseline-dataset) | WC2026 Elo probability baseline | 2026 | 72 matches |
-| [areezvisram12 — WC2026 Fixture](https://www.kaggle.com/datasets/areezvisram12/fifa-world-cup-2026-match-data-unofficial) | Complete 104-match fixture | 2026 | 104 matches |
-| [StatsBomb Open Data](https://github.com/statsbomb/open-data) | Match events (xG, passes, shots) | 2018, 2022 WC | JSON |
+| martj42 | All international results | 1872-2026 | 49,071 matches |
+| patateriedata | Daily updated results incl. qualifiers | 1872-2026 | 51,384 matches |
+| lchikry | Pre-calculated Elo, form, FIFA ratings | 1872-2025 | 43,364 x 35 features |
+| joshfjelstul | Relational World Cup database | 1930-2022 | 900 matches |
+| cashncarry | Monthly FIFA rankings | 1992-2024 | 67,472 records |
+| sarazahran1 | WC2026 Elo probability baseline | 2026 | 72 matches |
+| areezvisram12 | Complete 104-match fixture | 2026 | 104 matches |
+| StatsBomb Open Data | Match events xG, passes, shots | 2018-2022 WC | JSON |
 
 ---
 
-## 🔬 Methodology
+## 🔬 Feature Engineering
 
-### Feature Engineering
-- **Elo rating** — recalculated from scratch on 150+ years of results with dynamic K-factor
-- **Recent form** — win rate, goals scored/conceded over last 5/10/20 matches, computed as of match date
-- **FIFA ranking difference** — as of the month of each match
-- **Neutral venue flag** — reduces home advantage ~3.5pp in World Cup context
-- **Sample weights** — exponential decay favoring recent matches; friendlies penalized
+### Implemented
 
-### Unsupervised Learning
-- **K-Means + DBSCAN** clustering of 48 WC2026 teams → cluster label as categorical feature
-- **PCA** for multicollinearity detection and dimensionality reduction
+| Module | File | Description |
+|--------|------|-------------|
+| Elo rating | features/elo.py | Recalculated from 150yr history, dynamic K-factor |
+| H2H + Transitive | features/h2h.py | Direct H2H edge + transitive rival + temporal decay |
+| Recent form | features/form.py | Win rate, goals, points over 5/10/20 matches + exp decay |
 
-### Supervised Models
+### Planned
+
+| Feature | Source | Signal strength |
+|---------|--------|-----------------|
+| Squad market value | Transfermarkt | HIGH |
+| Average squad age | Transfermarkt | HIGH |
+| Coach tenure months | Transfermarkt | MEDIUM |
+| Squad continuity since 2022 WC | Transfermarkt | HIGH |
+| Key player injuries/suspensions | Press scraping | HIGH |
+| Venue altitude | Sedes data | MEDIUM |
+| Match day weather | Weather API | LOW-MEDIUM |
+
+---
+
+## 🤖 Modeling Pipeline
+
+### Supervised models
+
 | Model | Role |
 |-------|------|
 | Logistic Regression | Baseline |
@@ -98,38 +124,43 @@ world-cup-2026-predictor/
 | MLP (PyTorch) | Deep learning benchmark |
 | Stacking Ensemble | Final predictor |
 
-### Monte Carlo Simulation
+### Unsupervised methods
+
+- K-Means + DBSCAN: cluster 48 WC2026 teams by profile
+- PCA: multicollinearity detection + dimensionality reduction
+- Anomaly detection: teams punching above/below Elo weight
+
+### Monte Carlo simulation
+
 - 10,000 full tournament simulations
-- Calibrated probabilities per match from stacking ensemble
-- Penalty shootout modeled explicitly for knockout rounds
-- Output: probability distribution over final standings for all 48 teams
+- Calibrated probabilities from stacking ensemble
+- Penalty shootout modeled for knockout rounds
+- Adaptive: can be re-run after each round with real results
 
 ---
 
 ## 📈 EDA Key Findings
 
-- Elo difference correlates 0.515 with goal difference — strongest single feature
-- Home advantage drops 3.5pp in neutral World Cup venues
-- Away win rate trending upward (28% → 33% over 2021–2026)
-- Recent form (last 10 matches) shows 0.10 win rate differential between match winners and losers
+| Finding | Value |
+|---------|-------|
+| Elo diff correlation with goal diff | 0.515 |
+| Home advantage — all internationals | 49% HW / 23% D / 28% AW |
+| Home advantage — World Cup neutral | 45.5% HW / 22% D / 32.3% AW |
+| Away win rate trend 2021-2026 | 28% to 33% |
+| Top Elo WC2026 team | Spain (2195) |
+| Brazil current form last 10 | 0.50 win rate |
+| England current form last 10 | 0.90 win rate |
 
 ---
 
 ## 🚀 Quickstart
-`ash
-# Clone and setup
-git clone https://github.com/federico1809/world-cup-2026-predictor.git
-cd world-cup-2026-predictor
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
 
-# Download datasets (requires Kaggle API key)
-python -m world_cup_2026.data_ingestion.download
-
-# Run EDA notebook
-jupyter lab notebooks/01_eda/01_eda_results.ipynb
-`
+    git clone https://github.com/federico1809/world-cup-2026-predictor.git
+    cd world-cup-2026-predictor
+    python -m venv venv
+    venv\Scripts\activate
+    pip install -r requirements.txt
+    python -m world_cup_2026.data_ingestion.download
 
 ---
 
@@ -137,23 +168,28 @@ jupyter lab notebooks/01_eda/01_eda_results.ipynb
 
 | Phase | Status |
 |-------|--------|
-| Project scaffold | ✅ Complete |
-| Data ingestion pipeline | ✅ Complete |
-| Exploratory Data Analysis | ✅ Complete |
-| Feature Engineering | 🔄 In progress |
-| Unsupervised clustering | ⏳ Pending |
-| Supervised modeling | ⏳ Pending |
-| Monte Carlo simulation | ⏳ Pending |
+| Project scaffold | Done |
+| Data ingestion pipeline | Done |
+| Team name normalization 42/42 | Done |
+| Exploratory Data Analysis | Done |
+| Elo calculator | Done |
+| H2H + transitive rival features | Done |
+| Recent form features 5/10/20 | Done |
+| Transfermarkt squad features | Next |
+| Unsupervised clustering | Pending |
+| Supervised modeling | Pending |
+| Monte Carlo simulation | Pending |
+| Streamlit dashboard | Pending |
 
 ---
 
 ## 👤 Author
 
-**Federico Ceballos Torres**
-Data Scientist — [GitHub](https://github.com/federico1809) · [LinkedIn](https://linkedin.com/in/tu-perfil)
+Federico Ceballos Torres —
+GitHub: https://github.com/federico1809
 
 ---
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT — see LICENSE for details.
