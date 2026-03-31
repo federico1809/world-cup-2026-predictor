@@ -2,7 +2,6 @@
 form.py
 -------
 Recent form features for international football teams.
-
 Computes rolling performance metrics for each team over configurable
 match windows (default: 5, 10, 20 matches), strictly before each
 match date to avoid data leakage.
@@ -16,25 +15,27 @@ Features computed per window:
     - form points (3/1/0 weighted average)
     - weighted form (exponential decay — most recent matches weighted more)
 
+Performance: O(n log n) via groupby + rolling on team-perspective DataFrame.
+Prior implementation was O(n²) due to per-row list comprehension over
+growing history slices.
+
 Usage:
     from world_cup_2026.features.form import FormCalculator
     calc = FormCalculator(df_results_norm, windows=[5, 10, 20])
     df_with_form = calc.compute_form_features(df_results_norm)
 """
-
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
 DEFAULT_WINDOWS: list[int] = [5, 10, 20]
-FORM_DECAY_LAMBDA: float = 0.1   # decay per match (not per month)
+FORM_DECAY_LAMBDA: float = 0.1  # decay per match (not per month)
+
 OFFICIAL_TOURNAMENTS: set[str] = {
     "FIFA World Cup",
     "FIFA World Cup qualification",
@@ -51,11 +52,24 @@ OFFICIAL_TOURNAMENTS: set[str] = {
     "FIFA Confederations Cup",
 }
 
+# Precompute decay weight arrays per window size at module load time.
+# weights[w][i] = exp(-lambda * (w-1-i)) for i in 0..w-1, normalized.
+# This avoids recomputing inside every rolling.apply() call.
+_DECAY_WEIGHTS: dict[int, np.ndarray] = {}
+
+
+def _get_decay_weights(window: int, decay_lambda: float) -> np.ndarray:
+    """Return normalized exponential decay weights for a given window."""
+    key = (window, decay_lambda)
+    if key not in _DECAY_WEIGHTS:
+        w = np.exp(-decay_lambda * np.arange(window - 1, -1, -1))
+        _DECAY_WEIGHTS[key] = w / w.sum()
+    return _DECAY_WEIGHTS[key]
+
 
 # ---------------------------------------------------------------------------
 # FormCalculator
 # ---------------------------------------------------------------------------
-
 class FormCalculator:
     """Compute recent form features for all teams over all matches.
 
@@ -84,131 +98,182 @@ class FormCalculator:
         )
 
     # -----------------------------------------------------------------------
-    # Internal helpers
+    # Internal: build team-perspective (long format) DataFrame
     # -----------------------------------------------------------------------
+    def _build_long_df(self, source_df: pd.DataFrame) -> pd.DataFrame:
+        """Convert match DataFrame to team-perspective long format.
 
-    def _build_team_match_history(self) -> dict[str, list[dict]]:
-        """Build per-team chronological match history.
+        Each match produces two rows: one for the home team, one for away.
+        The resulting DataFrame is sorted by (team, date) and contains a
+        sequential match index per team — which is what rolling() needs.
 
-        Returns:
-            Dict mapping team_name → list of match dicts sorted by date.
-            Each dict contains: date, goals_for, goals_against,
-            result (W/D/L), points, is_official.
-        """
-        history: dict[str, list[dict]] = {}
-
-        for _, row in self.df.iterrows():
-            home, away = row["home_team"], row["away_team"]
-            hs, as_ = int(row["home_score"]), int(row["away_score"])
-            date = row["date"]
-            is_official = row["tournament"] in OFFICIAL_TOURNAMENTS
-
-            # Home team entry
-            if hs > as_:
-                h_result, h_pts, a_result, a_pts = "W", 3, "L", 0
-            elif hs < as_:
-                h_result, h_pts, a_result, a_pts = "L", 0, "W", 3
-            else:
-                h_result, h_pts, a_result, a_pts = "D", 1, "D", 1
-
-            for team, gf, ga, result, pts in [
-                (home, hs, as_, h_result, h_pts),
-                (away, as_, hs, a_result, a_pts),
-            ]:
-                if team not in history:
-                    history[team] = []
-                history[team].append({
-                    "date": date,
-                    "goals_for": gf,
-                    "goals_against": ga,
-                    "result": result,
-                    "points": pts,
-                    "is_official": is_official,
-                    "clean_sheet": int(ga == 0),
-                    "failed_to_score": int(gf == 0),
-                })
-
-        # Sort each team's history by date
-        for team in history:
-            history[team].sort(key=lambda x: x["date"])
-
-        logger.debug(f"Built match history for {len(history)} teams.")
-        return history
-
-    def _compute_window_stats(
-        self,
-        matches: list[dict],
-        window: int,
-    ) -> dict:
-        """Compute form stats over the last N matches.
+        Uses the original match index + role ('home'/'away') as merge key,
+        which handles teams playing two matches on the same date (common
+        in early 20th century South American tournaments).
 
         Args:
-            matches: List of match dicts (already filtered to before match date).
-            window: Number of most recent matches to use.
+            source_df: Normalized match DataFrame sorted by date.
 
         Returns:
-            Dict of form features for this window.
+            Long-format DataFrame with columns:
+                _match_idx, _role, date, team, opponent,
+                goals_for, goals_against, goal_diff,
+                win, draw, loss, points,
+                clean_sheet, failed_to_score, is_official
         """
-        recent = matches[-window:] if len(matches) >= window else matches
-        n = len(recent)
+        source = source_df.reset_index(drop=True)
+        source["_match_idx"] = source.index
 
-        if n == 0:
-            return self._neutral_window_stats(window)
+        home = source[["_match_idx", "date", "home_team", "away_team",
+                    "home_score", "away_score", "tournament"]].copy()
+        home.columns = ["_match_idx", "date", "team", "opponent",
+                        "goals_for", "goals_against", "tournament"]
+        home["_role"] = "home"
 
-        goals_for     = [m["goals_for"]        for m in recent]
-        goals_against = [m["goals_against"]     for m in recent]
-        points        = [m["points"]            for m in recent]
-        results       = [m["result"]            for m in recent]
-        clean_sheets  = [m["clean_sheet"]       for m in recent]
-        failed        = [m["failed_to_score"]   for m in recent]
+        away = source[["_match_idx", "date", "away_team", "home_team",
+                    "away_score", "home_score", "tournament"]].copy()
+        away.columns = ["_match_idx", "date", "team", "opponent",
+                        "goals_for", "goals_against", "tournament"]
+        away["_role"] = "away"
 
-        # Exponential decay weights — most recent match has highest weight
-        weights = np.array([
-            np.exp(-self.decay_lambda * (n - 1 - i))
-            for i in range(n)
-        ])
-        weights_norm = weights / weights.sum()
+        long = pd.concat([home, away], ignore_index=True)
+        long["goals_for"] = long["goals_for"].astype(int)
+        long["goals_against"] = long["goals_against"].astype(int)
+        long["goal_diff"] = long["goals_for"] - long["goals_against"]
 
-        win_rate   = sum(r == "W" for r in results) / n
-        draw_rate  = sum(r == "D" for r in results) / n
-        loss_rate  = sum(r == "L" for r in results) / n
+        long["win"]   = (long["goal_diff"] > 0).astype(int)
+        long["draw"]  = (long["goal_diff"] == 0).astype(int)
+        long["loss"]  = (long["goal_diff"] < 0).astype(int)
+        long["points"] = long["win"] * 3 + long["draw"] * 1
+        long["clean_sheet"]     = (long["goals_against"] == 0).astype(int)
+        long["failed_to_score"] = (long["goals_for"] == 0).astype(int)
+        long["is_official"] = long["tournament"].isin(OFFICIAL_TOURNAMENTS).astype(int)
 
-        return {
-            f"form_{window}_matches_played":    n,
-            f"form_{window}_win_rate":          win_rate,
-            f"form_{window}_draw_rate":         draw_rate,
-            f"form_{window}_loss_rate":         loss_rate,
-            f"form_{window}_goals_scored_avg":  float(np.mean(goals_for)),
-            f"form_{window}_goals_conceded_avg":float(np.mean(goals_against)),
-            f"form_{window}_goal_diff_avg":     float(np.mean(
-                [gf - ga for gf, ga in zip(goals_for, goals_against)]
-            )),
-            f"form_{window}_clean_sheet_rate":  float(np.mean(clean_sheets)),
-            f"form_{window}_failed_score_rate": float(np.mean(failed)),
-            f"form_{window}_points_avg":        float(np.mean(points)),
-            f"form_{window}_weighted_points":   float(np.dot(points, weights_norm)),
+        long = long.sort_values(["team", "date"]).reset_index(drop=True)
+        long.drop(columns=["tournament"], inplace=True)
+
+        logger.debug(f"Long format built: {len(long):,} rows, {long['team'].nunique()} teams.")
+        return long
+
+    # -----------------------------------------------------------------------
+    # Internal: compute rolling features on long DataFrame
+    # -----------------------------------------------------------------------
+    def _compute_rolling_features(self, long: pd.DataFrame) -> pd.DataFrame:
+        """Compute all rolling window features on the long-format DataFrame.
+
+        Uses .shift(1) before rolling to ensure strictly pre-match history
+        (no leakage — the current match is never included in its own form).
+
+        Args:
+            long: Team-perspective DataFrame from _build_long_df().
+
+        Returns:
+            long with one column per (window, metric) combination added.
+        """
+        feature_cols = [
+            "win", "draw", "loss",
+            "goals_for", "goals_against", "goal_diff",
+            "clean_sheet", "failed_to_score", "points",
+        ]
+
+        grouped = long.groupby("team", sort=False)
+
+        for w in self.windows:
+            logger.debug(f"  Computing rolling window={w}...")
+
+            # Shift(1) within each group — current match excluded from its own form
+            shifted = grouped[feature_cols].shift(1)
+
+            # Simple rolling means — native C, very fast
+            rolled = shifted.groupby(long["team"]).rolling(
+                window=w, min_periods=1
+            ).mean().reset_index(level=0, drop=True)
+
+            long[f"form_{w}_win_rate"]           = rolled["win"]
+            long[f"form_{w}_draw_rate"]          = rolled["draw"]
+            long[f"form_{w}_loss_rate"]          = rolled["loss"]
+            long[f"form_{w}_goals_scored_avg"]   = rolled["goals_for"]
+            long[f"form_{w}_goals_conceded_avg"] = rolled["goals_against"]
+            long[f"form_{w}_goal_diff_avg"]      = rolled["goal_diff"]
+            long[f"form_{w}_clean_sheet_rate"]   = rolled["clean_sheet"]
+            long[f"form_{w}_failed_score_rate"]  = rolled["failed_to_score"]
+            long[f"form_{w}_points_avg"]         = rolled["points"]
+
+            # Matches played in this window (capped at w)
+            counts = shifted["win"].groupby(long["team"]).rolling(
+                window=w, min_periods=1
+            ).count().reset_index(level=0, drop=True)
+            long[f"form_{w}_matches_played"] = counts.astype(int)
+
+            # Weighted points — exponential decay, rolling.apply()
+            decay_weights = _get_decay_weights(w, self.decay_lambda)
+
+            def _weighted_points(arr: np.ndarray) -> float:
+                n = len(arr)
+                if n == 0:
+                    return 1.0
+                if n < len(decay_weights):
+                    # Fewer matches than window: use last n weights, renormalize
+                    w_slice = decay_weights[-n:]
+                    w_norm = w_slice / w_slice.sum()
+                else:
+                    w_norm = decay_weights
+                return float(np.dot(arr, w_norm))
+
+            shifted_pts = shifted["points"]
+            long[f"form_{w}_weighted_points"] = (
+                shifted_pts
+                .groupby(long["team"])
+                .rolling(window=w, min_periods=1)
+                .apply(_weighted_points, raw=True)
+                .reset_index(level=0, drop=True)
+            )
+
+        return long
+
+    # -----------------------------------------------------------------------
+    # Internal: fill neutral stats for teams with no prior history
+    # -----------------------------------------------------------------------
+    def _fill_neutral(self, df_out: pd.DataFrame) -> pd.DataFrame:
+        """Replace NaN form values with neutral priors.
+
+        Called after the pivot/merge step. NaN appears when a team has
+        zero prior matches in the source (e.g. very first international).
+
+        Neutral priors:
+            win/draw/loss rate: 0.333 each
+            goals scored/conceded avg: 1.0
+            goal diff avg: 0.0
+            clean sheet rate: 0.2
+            failed score rate: 0.2
+            points avg: 1.0
+            weighted points: 1.0
+            matches played: 0
+        """
+        neutral = {
+            "win_rate": 0.333,
+            "draw_rate": 0.333,
+            "loss_rate": 0.333,
+            "goals_scored_avg": 1.0,
+            "goals_conceded_avg": 1.0,
+            "goal_diff_avg": 0.0,
+            "clean_sheet_rate": 0.2,
+            "failed_score_rate": 0.2,
+            "points_avg": 1.0,
+            "weighted_points": 1.0,
+            "matches_played": 0,
         }
-
-    def _neutral_window_stats(self, window: int) -> dict:
-        """Return neutral (no history) form stats for a window."""
-        return {
-            f"form_{window}_matches_played":    0,
-            f"form_{window}_win_rate":          0.333,
-            f"form_{window}_draw_rate":         0.333,
-            f"form_{window}_loss_rate":         0.333,
-            f"form_{window}_goals_scored_avg":  1.0,
-            f"form_{window}_goals_conceded_avg":1.0,
-            f"form_{window}_goal_diff_avg":     0.0,
-            f"form_{window}_clean_sheet_rate":  0.2,
-            f"form_{window}_failed_score_rate": 0.2,
-            f"form_{window}_points_avg":        1.0,
-            f"form_{window}_weighted_points":   1.0,
-        }
+        for side in ("home", "away"):
+            for w in self.windows:
+                for metric, val in neutral.items():
+                    col = f"{side}_form_{w}_{metric}"
+                    if col in df_out.columns:
+                        df_out[col] = df_out[col].fillna(val)
+        return df_out
 
     # -----------------------------------------------------------------------
     # Main pipeline
     # -----------------------------------------------------------------------
-
     def compute_form_features(
         self,
         df: pd.DataFrame,
@@ -217,7 +282,11 @@ class FormCalculator:
         """Add form features to a match DataFrame.
 
         For each match row, computes form features for both home and
-        away teams based on their history strictly before that match.
+        away teams based on their history strictly before that match
+        (no data leakage).
+
+        Performance: O(n log n) via groupby + rolling.
+        Prior implementation was O(n²).
 
         Args:
             df: Normalized match DataFrame sorted by date.
@@ -225,123 +294,75 @@ class FormCalculator:
 
         Returns:
             Copy of df with form feature columns added for both teams.
+            Column naming: home_form_{w}_{metric} / away_form_{w}_{metric}
         """
         suffix = "_off" if official_only else ""
         df_out = df.copy().sort_values("date").reset_index(drop=True)
+        df_out["_match_idx"] = df_out.index
 
-        # Filter source matches if official only
         source_df = self.df.copy()
         if official_only:
             source_df = source_df[
                 source_df["tournament"].isin(OFFICIAL_TOURNAMENTS)
             ].copy()
 
-        history = self._build_team_match_history_from(source_df)
-
         logger.info(
             f"Computing form features ({'official only' if official_only else 'all matches'}) "
             f"for {len(df_out):,} rows..."
         )
 
-        # For each match, get index in team history at that date
-        # We use a pointer approach for O(n) instead of O(n²)
-        team_pointers: dict[str, int] = {}
+        # Step 1: build long format (includes _match_idx and _role)
+        long = self._build_long_df(source_df)
 
-        # Pre-sort and index history by team
-        home_form_rows = []
-        away_form_rows = []
+        # Step 2: compute rolling features on long format
+        long = self._compute_rolling_features(long)
 
-        for _, row in df_out.iterrows():
-            match_date = row["date"]
-            home = row["home_team"]
-            away = row["away_team"]
+        # Step 3: collect form column names
+        form_cols = [c for c in long.columns if c.startswith("form_")]
 
-            # Get history up to (not including) this match
-            home_hist = [
-                m for m in history.get(home, [])
-                if m["date"] < match_date
+        # Step 4: build lookup index on (_match_idx, _role)
+        # This is guaranteed unique — one home row and one away row per match
+        long_indexed = long.set_index(["_match_idx", "_role"])
+
+        # Step 5: extract home and away form using match index
+        home_form = (
+            long_indexed.loc[
+                list(zip(df_out["_match_idx"], ["home"] * len(df_out))),
+                form_cols,
             ]
-            away_hist = [
-                m for m in history.get(away, [])
-                if m["date"] < match_date
+            .reset_index(drop=True)
+        )
+        home_form.columns = [f"home_{c}{suffix}" for c in form_cols]
+
+        away_form = (
+            long_indexed.loc[
+                list(zip(df_out["_match_idx"], ["away"] * len(df_out))),
+                form_cols,
             ]
+            .reset_index(drop=True)
+        )
+        away_form.columns = [f"away_{c}{suffix}" for c in form_cols]
 
-            home_row, away_row = {}, {}
-            for w in self.windows:
-                home_stats = self._compute_window_stats(home_hist, w)
-                away_stats = self._compute_window_stats(away_hist, w)
-
-                # Add home/away prefix
-                home_row.update({
-                    f"home_{k}{suffix}": v
-                    for k, v in home_stats.items()
-                })
-                away_row.update({
-                    f"away_{k}{suffix}": v
-                    for k, v in away_stats.items()
-                })
-
-            home_form_rows.append(home_row)
-            away_form_rows.append(away_row)
-
-        # Combine into DataFrame
-        df_home_form = pd.DataFrame(home_form_rows)
-        df_away_form = pd.DataFrame(away_form_rows)
-
+        # Step 6: concatenate
         df_out = pd.concat(
-            [df_out.reset_index(drop=True),
-             df_home_form.reset_index(drop=True),
-             df_away_form.reset_index(drop=True)],
+            [df_out.drop(columns=["_match_idx"]),
+            home_form,
+            away_form],
             axis=1,
         )
 
+        # Step 7: fill NaN with neutral priors
+        df_out = self._fill_neutral(df_out)
+
+        n_cols = len(home_form.columns) + len(away_form.columns)
         logger.success(
-            f"Form features computed. Added {len(df_home_form.columns) + len(df_away_form.columns)} columns."
+            f"Form features computed. Added {n_cols} columns."
         )
         return df_out
 
-    def _build_team_match_history_from(
-        self,
-        df: pd.DataFrame,
-    ) -> dict[str, list[dict]]:
-        """Build team history from a specific DataFrame (all or official only)."""
-        history: dict[str, list[dict]] = {}
-
-        for _, row in df.iterrows():
-            home, away = row["home_team"], row["away_team"]
-            hs, as_ = int(row["home_score"]), int(row["away_score"])
-            date = row["date"]
-            is_official = row["tournament"] in OFFICIAL_TOURNAMENTS
-
-            if hs > as_:
-                h_result, h_pts, a_result, a_pts = "W", 3, "L", 0
-            elif hs < as_:
-                h_result, h_pts, a_result, a_pts = "L", 0, "W", 3
-            else:
-                h_result, h_pts, a_result, a_pts = "D", 1, "D", 1
-
-            for team, gf, ga, result, pts in [
-                (home, hs, as_, h_result, h_pts),
-                (away, as_, hs, a_result, a_pts),
-            ]:
-                if team not in history:
-                    history[team] = []
-                history[team].append({
-                    "date": date,
-                    "goals_for": gf,
-                    "goals_against": ga,
-                    "result": result,
-                    "points": pts,
-                    "is_official": is_official,
-                    "clean_sheet": int(ga == 0),
-                    "failed_to_score": int(gf == 0),
-                })
-
-        for team in history:
-            history[team].sort(key=lambda x: x["date"])
-
-        return history
-
+    # -----------------------------------------------------------------------
+    # Public utility: single team snapshot
+    # -----------------------------------------------------------------------
     def get_team_current_form(
         self,
         team: str,
@@ -358,15 +379,71 @@ class FormCalculator:
             official_only: Use only official matches.
 
         Returns:
-            Form stats dict for this team.
+            Dict of form stats for this team at the given date.
         """
-        source = self.df
+        source = self.df.copy()
         if official_only:
             source = source[source["tournament"].isin(OFFICIAL_TOURNAMENTS)]
 
-        history = self._build_team_match_history_from(source)
-        team_hist = [
-            m for m in history.get(team, [])
-            if m["date"] < as_of
-        ]
-        return self._compute_window_stats(team_hist, window)
+        # Filter to this team's matches before as_of
+        mask = (
+            ((source["home_team"] == team) | (source["away_team"] == team))
+            & (source["date"] < as_of)
+        )
+        team_matches = source[mask].sort_values("date").tail(window)
+
+        if team_matches.empty:
+            return self._neutral_snapshot(window)
+
+        records = []
+        for _, row in team_matches.iterrows():
+            if row["home_team"] == team:
+                gf, ga = int(row["home_score"]), int(row["away_score"])
+            else:
+                gf, ga = int(row["away_score"]), int(row["home_score"])
+            gd = gf - ga
+            records.append({
+                "goals_for": gf,
+                "goals_against": ga,
+                "goal_diff": gd,
+                "win": int(gd > 0),
+                "draw": int(gd == 0),
+                "loss": int(gd < 0),
+                "points": 3 if gd > 0 else (1 if gd == 0 else 0),
+                "clean_sheet": int(ga == 0),
+                "failed_to_score": int(gf == 0),
+            })
+
+        n = len(records)
+        arr = {k: np.array([r[k] for r in records]) for k in records[0]}
+        weights = _get_decay_weights(n, self.decay_lambda)
+
+        return {
+            f"form_{window}_matches_played":     n,
+            f"form_{window}_win_rate":           float(arr["win"].mean()),
+            f"form_{window}_draw_rate":          float(arr["draw"].mean()),
+            f"form_{window}_loss_rate":          float(arr["loss"].mean()),
+            f"form_{window}_goals_scored_avg":   float(arr["goals_for"].mean()),
+            f"form_{window}_goals_conceded_avg": float(arr["goals_against"].mean()),
+            f"form_{window}_goal_diff_avg":      float(arr["goal_diff"].mean()),
+            f"form_{window}_clean_sheet_rate":   float(arr["clean_sheet"].mean()),
+            f"form_{window}_failed_score_rate":  float(arr["failed_to_score"].mean()),
+            f"form_{window}_points_avg":         float(arr["points"].mean()),
+            f"form_{window}_weighted_points":    float(np.dot(arr["points"], weights)),
+        }
+
+    def _neutral_snapshot(self, window: int) -> dict:
+        """Neutral priors for a team with no history."""
+        return {
+            f"form_{window}_matches_played":     0,
+            f"form_{window}_win_rate":           0.333,
+            f"form_{window}_draw_rate":          0.333,
+            f"form_{window}_loss_rate":          0.333,
+            f"form_{window}_goals_scored_avg":   1.0,
+            f"form_{window}_goals_conceded_avg": 1.0,
+            f"form_{window}_goal_diff_avg":      0.0,
+            f"form_{window}_clean_sheet_rate":   0.2,
+            f"form_{window}_failed_score_rate":  0.2,
+            f"form_{window}_points_avg":         1.0,
+            f"form_{window}_weighted_points":    1.0,
+        }

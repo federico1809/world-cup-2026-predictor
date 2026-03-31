@@ -160,6 +160,8 @@ _PASSTHROUGH_NAMES: frozenset[str] = frozenset({
     "vanuatu", "yugoslavia", "zaire", "cape verde"
 })
 
+# Tracks unknown names already warned about — avoids log spam
+_warned_unknown: set[str] = set()
 
 def normalize_team_name(name: str) -> str:
     """Normalize a team name to its canonical form.
@@ -185,10 +187,12 @@ def normalize_team_name(name: str) -> str:
     if key in _PASSTHROUGH_NAMES:
         return stripped
 
-    # Level 3 — unknown, return as-is but warn for manual review
-    logger.warning(f"Unknown team name: '{stripped}' — add to normalize.py if needed.")
+    # Level 3 — unknown, return as-is but warn once for manual review
+    if stripped not in _warned_unknown:
+        _warned_unknown.add(stripped)
+        logger.warning(f"Unknown team name: '{stripped}' — add to normalize.py if needed.")
     return stripped
-
+  
 
 def normalize_dataframe_teams(df, columns: list[str]):
     """Apply normalize_team_name to one or more DataFrame columns.
