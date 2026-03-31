@@ -1,0 +1,7 @@
+match,team_a,team_b,elo_a,elo_b,elo_diff,form_10_win_a,form_10_win_b,p_a_win,p_draw,p_b_win,predicted_winner,confidence
+UEFA Playoff A — Group B,Italy,Bosnia-Herzegovina,1953.0,1623.0,330.0,0.6,0.6,0.679,0.22,0.101,Italy,0.679
+UEFA Playoff B — Group F,Sweden,Poland,1713.0,1810.0,-98.0,0.3,0.7,0.251,0.22,0.529,Poland,0.529
+UEFA Playoff C — Group D,Kosovo,Turkey,1750.0,1907.0,-157.0,0.7,0.7,0.225,0.22,0.555,Turkey,0.555
+UEFA Playoff D — Group A,Czechia,Denmark,1776.0,1941.0,-165.0,0.6,0.6,0.217,0.22,0.563,Denmark,0.563
+FIFA Intercontinental 1 — Group K,Jamaica,DR Congo,1664.0,1728.0,-64.0,0.5,0.6,0.311,0.22,0.469,DR Congo,0.469
+FIFA Intercontinental 2 — Group I,Bolivia,Iraq,1722.0,1732.0,-10.0,0.3,0.6,0.355,0.22,0.425,Iraq,0.425
