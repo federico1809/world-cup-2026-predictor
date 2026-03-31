@@ -191,3 +191,4 @@ cython_debug/
 .pypirc
 outputs/figures/*.png
 outputs/predictions/*
+!outputs/predictions/*.csv
