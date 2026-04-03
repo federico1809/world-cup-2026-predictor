@@ -1,5 +1,13 @@
-# Data
-/data/
+# Data — ignore large raw datasets, keep fixture config
+/data/raw/martj42_results/
+/data/raw/patateriedata_results/
+/data/raw/lchikry_features/
+/data/raw/joshfjelstul_worldcup/
+/data/raw/cashncarry_rankings/
+/data/raw/sarazahran1_baseline/
+/data/external/
+/data/interim/
+/data/processed/
 
 # Mac OS-specific storage files
 .DS_Store
