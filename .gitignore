@@ -8,6 +8,7 @@
 /data/external/
 /data/interim/
 /data/processed/
+!data/processed/*.parquet
 
 # Mac OS-specific storage files
 .DS_Store
