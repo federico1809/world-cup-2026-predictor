@@ -1,0 +1,17 @@
+﻿city_id,city_name,country,altitude_m
+1,Atlanta,USA,320
+2,Boston,USA,9
+3,Dallas,USA,131
+4,Houston,USA,15
+5,Kansas City,USA,270
+6,Los Angeles,USA,71
+7,Miami,USA,2
+8,New York/New Jersey,USA,10
+9,Philadelphia,USA,12
+10,San Francisco Bay Area,USA,16
+11,Seattle,USA,52
+12,Toronto,Canada,76
+13,Vancouver,Canada,70
+14,Guadalajara,Mexico,1566
+15,Mexico City,Mexico,2240
+16,Monterrey,Mexico,538
