@@ -1,5 +1,4 @@
 ﻿# ⚽ FIFA World Cup 2026 Predictor
-
 > End-to-end machine learning pipeline for predicting FIFA World Cup 2026 outcomes
 > using ensemble models, Monte Carlo simulation, and unsupervised clustering.
 
@@ -15,14 +14,12 @@
 |-------|--------|
 | Match | Win / Draw / Loss probability per match |
 | Group stage | Final standings + classification probabilities |
-| Knockout bracket | How R16 fixture assembles from group results |
-| Phase advancement | P(reach R16 / QF / SF / Final / Win) per team |
+| Knockout bracket | How R32/R16 fixture assembles from group results |
+| Phase advancement | P(reach R32 / R16 / QF / SF / Final / Win) per team |
 | Tournament winner | Full probability distribution for all 48 teams |
 
 ### Adaptive retraining strategy
-
 The model is designed for real-time use during the tournament:
-
 - Pre-tournament: predict all 104 matches end-to-end via Monte Carlo
 - After group stage: retrain on actual group results, predict knockout phase
 - After each round: incorporate new results, update remaining predictions
@@ -52,7 +49,7 @@ dashboard + static notebook visualizations.
     ├── data/
     │   ├── raw/                  Downloaded datasets (never modified)
     │   ├── interim/              Intermediate transformations
-    │   ├── processed/            Model-ready feature matrices
+    │   ├── processed/            Model-ready feature matrices (*.parquet tracked)
     │   └── external/             StatsBomb events, third-party sources
     ├── models/                   Serialized trained models and encoders
     ├── notebooks/
@@ -90,13 +87,16 @@ dashboard + static notebook visualizations.
 
 ## 🔬 Feature Engineering
 
-### Implemented
+### Implemented (master_features.parquet — 9,796 x 94)
 
 | Module | File | Description |
 |--------|------|-------------|
-| Elo rating | features/elo.py | Recalculated from 150yr history, dynamic K-factor |
+| Elo rating | features/elo.py | Recalculated from 150yr history, dynamic K-factor (WC=60, Friendly=20) |
 | H2H + Transitive | features/h2h.py | Direct H2H edge + transitive rival + temporal decay |
 | Recent form | features/form.py | Win rate, goals, points over 5/10/20 matches + exp decay |
+| FIFA Rankings | cashncarry dataset | ranking_home, ranking_away, ranking_diff — as-of join per match date |
+| Neutral venue | results dataset | Binary flag — reduces home advantage ~3.5pp |
+| Cluster label | notebook 03 | KMeans cluster assignment (Elite / Mid-Tier / Underdogs) |
 
 ### Planned
 
@@ -116,26 +116,60 @@ dashboard + static notebook visualizations.
 
 ### Supervised models
 
-| Model | Role |
-|-------|------|
-| Logistic Regression | Baseline |
-| Random Forest | Ensemble component |
-| XGBoost + SHAP | Primary model + interpretability |
-| MLP (PyTorch) | Deep learning benchmark |
-| Stacking Ensemble | Final predictor |
+| Model | Val Accuracy | Val F1-macro | Val Log-loss | Status |
+|-------|-------------|--------------|--------------|--------|
+| Logistic Regression (baseline) | 0.4113 | 0.3262 | 1.0948 | ✅ Done |
+| XGBoost + Optuna (87 features) | 0.3969 | 0.3667 | 1.0886 | ✅ Done — selected |
+| Random Forest (87 features) | 0.3846 | 0.3566 | 1.0895 | ✅ Done |
+| MLP (PyTorch) | — | — | — | ⏳ Pending |
+| Stacking Ensemble | — | — | — | ⏳ Pending |
+
+**Selected model:** XGBoost — best F1-macro and log-loss on validation set.
+
+**Feature set (87):** Elo (4) + Neutral (1) + FIFA Rankings (3) + Form 5/10/20 (66) + H2H (11) + Cluster (2)
+
+**Top features by gain:** neutral, elo_diff, h2h_win_rate_a, win_prob_home, ranking_diff
 
 ### Unsupervised methods
 
-- K-Means + DBSCAN: cluster 48 WC2026 teams by profile
-- PCA: multicollinearity detection + dimensionality reduction
-- Anomaly detection: teams punching above/below Elo weight
+| Method | Output | Status |
+|--------|--------|--------|
+| K-Means (k=4) | Cluster labels for 48 WC2026 teams | ✅ Done |
+| PCA 2D | Visualization + variance analysis (79.1% in 2 components) | ✅ Done |
+| Anomaly detection | Distance to centroid — Ecuador, Qatar flagged | ✅ Done |
+
+**Cluster results:**
+| Cluster | Name | n | Avg Elo | Form WR |
+|---------|------|---|---------|---------|
+| 1 | Elite | 16 | 1983 | 0.72 |
+| 0 | Consolidated Mid-Tier | 12 | 1847 | 0.38 |
+| 2 | Dynamic Mid-Tier | 14 | 1828 | 0.54 |
+| 3 | Underdogs | 6 | 1679 | 0.32 |
 
 ### Monte Carlo simulation
 
 - 10,000 full tournament simulations
-- Calibrated probabilities from stacking ensemble
-- Penalty shootout modeled for knockout rounds
-- Adaptive: can be re-run after each round with real results
+- WC2026 structure: Groups → R32 → R16 → QF → SF → 3rd place match → Final
+- XGBoost probabilities sampled per match, penalty shootout on knockout draws
+- Official FIFA bracket respected (stage-by-stage fixture from areezvisram12 dataset)
+- Adaptive: re-run after each round with real results
+
+---
+
+## 🏆 Current Tournament Predictions (10,000 simulations)
+
+| # | Team | Group | R32 | R16 | QF | SF | Final | Win |
+|---|------|-------|-----|-----|----|----|-------|-----|
+| 1 | Argentina | J | 67.6% | 37.9% | 21.2% | 12.8% | 7.7% | 4.3% |
+| 2 | Croatia | L | 73.2% | 41.0% | 25.8% | 13.5% | 7.7% | 4.2% |
+| 3 | Spain | H | 73.7% | 40.5% | 22.0% | 11.8% | 6.7% | 3.6% |
+| 4 | England | L | 68.0% | 36.6% | 21.3% | 11.3% | 6.1% | 3.5% |
+| 5 | France | I | 67.2% | 39.8% | 24.5% | 14.2% | 7.0% | 3.5% |
+| 6 | Colombia | K | 79.7% | 37.2% | 21.4% | 9.8% | 5.4% | 2.9% |
+| 7 | Switzerland | B | 86.4% | 42.5% | 19.1% | 9.8% | 5.6% | 2.8% |
+| 8 | Portugal | K | 64.3% | 30.7% | 18.9% | 8.8% | 4.8% | 2.8% |
+
+*Full table in outputs/predictions/tournament_probabilities.csv*
 
 ---
 
@@ -168,24 +202,25 @@ dashboard + static notebook visualizations.
 
 | Phase | Status |
 |-------|--------|
-| Project scaffold | Done |
-| Data ingestion pipeline | Done |
-| Team name normalization 42/42 | Done |
-| Exploratory Data Analysis | Done |
-| Elo calculator | Done |
-| H2H + transitive rival features | Done |
-| Recent form features 5/10/20 | Done |
-| Transfermarkt squad features | Next |
-| Unsupervised clustering | Pending |
-| Supervised modeling | Pending |
-| Monte Carlo simulation | Pending |
-| Streamlit dashboard | Pending |
+| Project scaffold | ✅ Done |
+| Data ingestion pipeline | ✅ Done |
+| Team name normalization 42/42 | ✅ Done |
+| Exploratory Data Analysis | ✅ Done |
+| Elo calculator | ✅ Done |
+| H2H + transitive rival features | ✅ Done |
+| Recent form features 5/10/20 | ✅ Done |
+| FIFA Rankings feature join | ✅ Done |
+| Unsupervised clustering (k=4) | ✅ Done |
+| Supervised modeling (XGBoost) | ✅ Done |
+| Monte Carlo simulation (10,000 runs) | ✅ Done |
+| Transfermarkt squad features | ⏳ Pending |
+| Streamlit dashboard | ⏳ Pending |
 
 ---
 
 ## 👤 Author
 
-Federico Ceballos Torres —
+Federico Ceballos Torres — Data Scientist
 GitHub: https://github.com/federico1809
 
 ---
