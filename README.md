@@ -14,8 +14,8 @@
 |-------|--------|
 | Match | Win / Draw / Loss probability per match |
 | Group stage | Final standings + classification probabilities |
-| Knockout bracket | How R16 fixture assembles from group results |
-| Phase advancement | P(reach R16 / QF / SF / Final / Win) per team |
+| Knockout bracket | How R32/R16 fixture assembles from group results |
+| Phase advancement | P(reach R32 / R16 / QF / SF / Final / Win) per team |
 | Tournament winner | Full probability distribution for all 48 teams |
 
 ### Adaptive retraining strategy
@@ -118,11 +118,11 @@ dashboard + static notebook visualizations.
 
 | Model | Val Accuracy | Val F1-macro | Val Log-loss | Status |
 |-------|-------------|--------------|--------------|--------|
-| Logistic Regression (baseline) | 0.4113 | 0.3262 | 1.0948 | Done |
-| XGBoost + Optuna (87 features) | 0.3969 | 0.3667 | 1.0886 | Done ✓ selected |
-| Random Forest (87 features) | 0.3846 | 0.3566 | 1.0895 | Done |
-| MLP (PyTorch) | — | — | — | Pending |
-| Stacking Ensemble | — | — | — | Pending |
+| Logistic Regression (baseline) | 0.4113 | 0.3262 | 1.0948 | ✅ Done |
+| XGBoost + Optuna (87 features) | 0.3969 | 0.3667 | 1.0886 | ✅ Done — selected |
+| Random Forest (87 features) | 0.3846 | 0.3566 | 1.0895 | ✅ Done |
+| MLP (PyTorch) | — | — | — | ⏳ Pending |
+| Stacking Ensemble | — | — | — | ⏳ Pending |
 
 **Selected model:** XGBoost — best F1-macro and log-loss on validation set.
 
@@ -134,9 +134,9 @@ dashboard + static notebook visualizations.
 
 | Method | Output | Status |
 |--------|--------|--------|
-| K-Means (k=4) | Cluster labels for 48 WC2026 teams | Done |
-| PCA 2D | Visualization + variance analysis | Done |
-| Anomaly detection | Distance to centroid — Ecuador, Qatar flagged | Done |
+| K-Means (k=4) | Cluster labels for 48 WC2026 teams | ✅ Done |
+| PCA 2D | Visualization + variance analysis (79.1% in 2 components) | ✅ Done |
+| Anomaly detection | Distance to centroid — Ecuador, Qatar flagged | ✅ Done |
 
 **Cluster results:**
 | Cluster | Name | n | Avg Elo | Form WR |
@@ -147,10 +147,29 @@ dashboard + static notebook visualizations.
 | 3 | Underdogs | 6 | 1679 | 0.32 |
 
 ### Monte Carlo simulation
+
 - 10,000 full tournament simulations
-- Calibrated probabilities from XGBoost
-- Penalty shootout modeled for knockout rounds
+- WC2026 structure: Groups → R32 → R16 → QF → SF → 3rd place match → Final
+- XGBoost probabilities sampled per match, penalty shootout on knockout draws
+- Official FIFA bracket respected (stage-by-stage fixture from areezvisram12 dataset)
 - Adaptive: re-run after each round with real results
+
+---
+
+## 🏆 Current Tournament Predictions (10,000 simulations)
+
+| # | Team | Group | R32 | R16 | QF | SF | Final | Win |
+|---|------|-------|-----|-----|----|----|-------|-----|
+| 1 | Argentina | J | 67.6% | 37.9% | 21.2% | 12.8% | 7.7% | 4.3% |
+| 2 | Croatia | L | 73.2% | 41.0% | 25.8% | 13.5% | 7.7% | 4.2% |
+| 3 | Spain | H | 73.7% | 40.5% | 22.0% | 11.8% | 6.7% | 3.6% |
+| 4 | England | L | 68.0% | 36.6% | 21.3% | 11.3% | 6.1% | 3.5% |
+| 5 | France | I | 67.2% | 39.8% | 24.5% | 14.2% | 7.0% | 3.5% |
+| 6 | Colombia | K | 79.7% | 37.2% | 21.4% | 9.8% | 5.4% | 2.9% |
+| 7 | Switzerland | B | 86.4% | 42.5% | 19.1% | 9.8% | 5.6% | 2.8% |
+| 8 | Portugal | K | 64.3% | 30.7% | 18.9% | 8.8% | 4.8% | 2.8% |
+
+*Full table in outputs/predictions/tournament_probabilities.csv*
 
 ---
 
@@ -162,7 +181,7 @@ dashboard + static notebook visualizations.
 | Home advantage — all internationals | 49% HW / 23% D / 28% AW |
 | Home advantage — World Cup neutral | 45.5% HW / 22% D / 32.3% AW |
 | Away win rate trend 2021-2026 | 28% to 33% |
-| Top Elo WC2026 team | Spain (2209) |
+| Top Elo WC2026 team | Spain (2195) |
 | Brazil current form last 10 | 0.50 win rate |
 | England current form last 10 | 0.90 win rate |
 
@@ -193,8 +212,8 @@ dashboard + static notebook visualizations.
 | FIFA Rankings feature join | ✅ Done |
 | Unsupervised clustering (k=4) | ✅ Done |
 | Supervised modeling (XGBoost) | ✅ Done |
+| Monte Carlo simulation (10,000 runs) | ✅ Done |
 | Transfermarkt squad features | ⏳ Pending |
-| Monte Carlo simulation | ⏳ Pending |
 | Streamlit dashboard | ⏳ Pending |
 
 ---
