@@ -45,6 +45,7 @@ MODEL_FEATURES = None
 df_snapshot = None
 df_teams    = None
 all_teams   = None
+MATCH_PROBS = None
 
 
 def build_match_features(home_team, away_team, neutral=True):
@@ -94,10 +95,21 @@ def build_match_features(home_team, away_team, neutral=True):
 
     return np.array([features[f] for f in MODEL_FEATURES], dtype=float)
 
+def precompute_match_probs(teams):
+    """Precompute predict_proba for all possible matchups in batch."""
+    from itertools import permutations
+    pairs = list(permutations(teams, 2))
+    matrix = np.array(
+        [build_match_features(h, a) for h, a in pairs],
+        dtype=float
+    )
+    probs = xgb_model.predict_proba(matrix)
+    return {(h, a): probs[i] for i, (h, a) in enumerate(pairs)}
+
 
 def simulate_match_fast(home_team, away_team, neutral=True):
-    vec   = build_match_features(home_team, away_team, neutral=neutral)
-    probs = xgb_model.predict_proba(vec.reshape(1, -1))[0]
+    """Sample match result from precomputed probabilities."""
+    probs = MATCH_PROBS[(home_team, away_team)]
     result = np.random.choice(["away", "draw", "home"], p=probs)
     if result == "home":
         return 3, 0, "home"
@@ -343,6 +355,11 @@ def main(
 
     df_snapshot = df_snapshot_raw
     logger.info(f"Snapshot ready: {df_snapshot.shape}")
+    logger.info("Precomputing match probabilities...")
+    global MATCH_PROBS
+    MATCH_PROBS = precompute_match_probs(all_teams)
+    logger.info(f"Precomputed {len(MATCH_PROBS):,} matchups")
+
 
     # ── Run simulations ───────────────────────────────────────────────────────
     counts = {t: {p: 0 for p in PHASES} for t in all_teams}
