@@ -10,6 +10,8 @@
   "squad_value_home",
   "squad_value_away",
   "squad_value_diff",
+  "rest_days_home",
+  "rest_days_away",
   "home_form_5_win_rate",
   "home_form_5_draw_rate",
   "home_form_5_loss_rate",
