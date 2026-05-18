@@ -43,7 +43,7 @@ def test_master_features_shape(processed_dir):
 def test_model_features_count(models_dir):
     with open(models_dir / "model_features.json") as f:
         features = json.load(f)
-    assert len(features) == 92, f"Expected 92 features, got {len(features)}"
+    assert len(features) == 93, f"Expected 93 features, got {len(features)}"
 
 
 # ---------------------------------------------------------------------------
