@@ -68,7 +68,10 @@ def build_match_features(home_team, away_team, neutral=True):
         "ranking_diff":     h["ranking"] - a["ranking"],
         "squad_value_home": h["squad_value"],
         "squad_value_away": a["squad_value"],
-        "squad_value_diff": h["squad_value"] - a["squad_value"],
+        'squad_value_diff': h["squad_value"] - a["squad_value"],
+        'rest_days_home':   30,
+        'rest_days_away':   30,
+        'match_importance': 3,  # World Cup = tier 3 (highest)
     }
 
     for w in FORM_WINDOWS:

@@ -12,6 +12,7 @@
   "squad_value_diff",
   "rest_days_home",
   "rest_days_away",
+  "match_importance",
   "home_form_5_win_rate",
   "home_form_5_draw_rate",
   "home_form_5_loss_rate",

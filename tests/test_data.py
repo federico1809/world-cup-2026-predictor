@@ -11,6 +11,10 @@ import pytest
 
 from pathlib import Path
 
+_PARQUET = Path(__file__).resolve().parents[1] / "data" / "processed" / "master_features.parquet"
+_SKIP_IF_NO_DATA = pytest.mark.skipif(
+    not _PARQUET.exists(), reason="master_features.parquet not available in CI"
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -34,7 +38,7 @@ def models_dir(proj_root):
 # ---------------------------------------------------------------------------
 # Data integrity
 # ---------------------------------------------------------------------------
-
+@_SKIP_IF_NO_DATA
 def test_master_features_shape(processed_dir):
     df = pd.read_parquet(processed_dir / "master_features.parquet")
     assert df.shape == (9796, 97), f"Expected (9796, 97), got {df.shape}"
@@ -43,7 +47,7 @@ def test_master_features_shape(processed_dir):
 def test_model_features_count(models_dir):
     with open(models_dir / "model_features.json") as f:
         features = json.load(f)
-    assert len(features) == 92, f"Expected 92 features, got {len(features)}"
+    assert len(features) == 93, f"Expected 93 features, got {len(features)}"
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +67,7 @@ def test_model_predict_proba(models_dir):
 # ---------------------------------------------------------------------------
 # Pipeline smoke test
 # ---------------------------------------------------------------------------
-
+@_SKIP_IF_NO_DATA
 def test_train_smoke(monkeypatch, tmp_path):
     import world_cup_2026.modeling.train as train_module
     from typer.testing import CliRunner

@@ -87,7 +87,7 @@ dashboard + static notebook visualizations.
 
 ## 🔬 Feature Engineering
 
-### Implemented (master_features.parquet — 9,796 x 94)
+### Implemented (master_features.parquet — 9,796 × 97)
 
 | Module | File | Description |
 |--------|------|-------------|
@@ -96,13 +96,15 @@ dashboard + static notebook visualizations.
 | Recent form | features/form.py | Win rate, goals, points over 5/10/20 matches + exp decay |
 | FIFA Rankings | cashncarry dataset | ranking_home, ranking_away, ranking_diff — as-of join per match date |
 | Neutral venue | results dataset | Binary flag — reduces home advantage ~3.5pp |
+| Squad market value | Transfermarkt | squad_value_home, squad_value_away, squad_value_diff |
+| Rest days | match dates | Days since last match per team — defaults to 30 for WC2026 |
+| Match importance | tournament tier | Tier encoding 0–3 — World Cup fixed at 3 (highest) |
 | Cluster label | notebook 03 | KMeans cluster assignment (Elite / Mid-Tier / Underdogs) |
 
 ### Planned
 
 | Feature | Source | Signal strength |
 |---------|--------|-----------------|
-| Squad market value | Transfermarkt | HIGH |
 | Average squad age | Transfermarkt | HIGH |
 | Coach tenure months | Transfermarkt | MEDIUM |
 | Squad continuity since 2022 WC | Transfermarkt | HIGH |
@@ -119,14 +121,15 @@ dashboard + static notebook visualizations.
 | Model | Val Accuracy | Val F1-macro | Val Log-loss | Status |
 |-------|-------------|--------------|--------------|--------|
 | Logistic Regression (baseline) | 0.4113 | 0.3262 | 1.0948 | ✅ Done |
-| XGBoost + Optuna (87 features) | 0.3969 | 0.3667 | 1.0886 | ✅ Done — selected |
+| XGBoost + Optuna (87 features) | 0.3969 | 0.3667 | 1.0886 | ✅ Done |
 | Random Forest (87 features) | 0.3846 | 0.3566 | 1.0895 | ✅ Done |
+| XGBoost + Optuna (93 features) | 0.3981 | 0.3710 | 1.0871 | ✅ Done — selected |
 | MLP (PyTorch) | — | — | — | ⏳ Pending |
 | Stacking Ensemble | — | — | — | ⏳ Pending |
 
 **Selected model:** XGBoost — best F1-macro and log-loss on validation set.
 
-**Feature set (87):** Elo (4) + Neutral (1) + FIFA Rankings (3) + Form 5/10/20 (66) + H2H (11) + Cluster (2)
+**Feature set (93):** Elo (4) + Neutral (1) + FIFA Rankings (3) + Form 5/10/20 (66) + H2H (11) + Squad Value (3) + Rest Days (2) + Match Importance (1) + Cluster (2)
 
 **Top features by gain:** neutral, elo_diff, h2h_win_rate_a, win_prob_home, ranking_diff
 
@@ -139,6 +142,7 @@ dashboard + static notebook visualizations.
 | Anomaly detection | Distance to centroid — Ecuador, Qatar flagged | ✅ Done |
 
 **Cluster results:**
+
 | Cluster | Name | n | Avg Elo | Form WR |
 |---------|------|---|---------|---------|
 | 1 | Elite | 16 | 1983 | 0.72 |
@@ -158,18 +162,20 @@ dashboard + static notebook visualizations.
 
 ## 🏆 Current Tournament Predictions (10,000 simulations)
 
-| # | Team | Group | R32 | R16 | QF | SF | Final | Win |
-|---|------|-------|-----|-----|----|----|-------|-----|
-| 1 | Argentina | J | 67.6% | 37.9% | 21.2% | 12.8% | 7.7% | 4.3% |
-| 2 | Croatia | L | 73.2% | 41.0% | 25.8% | 13.5% | 7.7% | 4.2% |
-| 3 | Spain | H | 73.7% | 40.5% | 22.0% | 11.8% | 6.7% | 3.6% |
-| 4 | England | L | 68.0% | 36.6% | 21.3% | 11.3% | 6.1% | 3.5% |
-| 5 | France | I | 67.2% | 39.8% | 24.5% | 14.2% | 7.0% | 3.5% |
-| 6 | Colombia | K | 79.7% | 37.2% | 21.4% | 9.8% | 5.4% | 2.9% |
-| 7 | Switzerland | B | 86.4% | 42.5% | 19.1% | 9.8% | 5.6% | 2.8% |
-| 8 | Portugal | K | 64.3% | 30.7% | 18.9% | 8.8% | 4.8% | 2.8% |
+| # | Team | P(R16) | P(SF) | P(Final) | P(Champion) |
+|---|------|--------|-------|----------|-------------|
+| 1 | Croatia | 14.85% | 2.29% | 3.56% | 4.33% |
+| 2 | Argentina | 17.58% | 1.96% | 3.41% | 4.28% |
+| 3 | Spain | 19.27% | 2.26% | 3.24% | 3.69% |
+| 4 | Uruguay | 18.60% | 2.19% | 2.65% | 3.48% |
+| 5 | Switzerland | 24.51% | 2.31% | 2.54% | 3.36% |
+| 6 | France | 15.79% | 3.47% | 3.07% | 3.35% |
+| 7 | Colombia | 15.19% | 2.33% | 2.71% | 3.22% |
+| 8 | Portugal | 11.75% | 1.82% | 2.37% | 3.18% |
+| 9 | England | 15.53% | 2.21% | 2.61% | 2.86% |
+| 10 | Belgium | 20.01% | 1.45% | 2.36% | 2.82% |
 
-*Full table in outputs/predictions/tournament_probabilities.csv*
+*Full results in `outputs/predictions/simulation_results.csv`*
 
 ---
 
@@ -210,17 +216,18 @@ dashboard + static notebook visualizations.
 | H2H + transitive rival features | ✅ Done |
 | Recent form features 5/10/20 | ✅ Done |
 | FIFA Rankings feature join | ✅ Done |
+| Squad market value features | ✅ Done |
+| Rest days + match importance features | ✅ Done |
 | Unsupervised clustering (k=4) | ✅ Done |
-| Supervised modeling (XGBoost) | ✅ Done |
+| Supervised modeling (XGBoost, 93 features) | ✅ Done |
 | Monte Carlo simulation (10,000 runs) | ✅ Done |
-| Transfermarkt squad features | ⏳ Pending |
 | Streamlit dashboard | ⏳ Pending |
 
 ---
 
 ## 👤 Author
 
-Federico Ceballos Torres — Data Scientist
+Federico Ceballos Torres — Data Scientist  
 GitHub: https://github.com/federico1809
 
 ---
