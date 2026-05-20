@@ -148,3 +148,67 @@ def _build_match_features_vec(
     features["away_cluster_enc"] = float(a["cluster_enc"])
 
     return np.array([features[f] for f in model_features], dtype=float).reshape(1, -1)
+
+
+# ── Cached loaders ─────────────────────────────────────────────────────────────
+
+@st.cache_data
+def load_snapshot() -> pd.DataFrame:
+    return _build_snapshot()
+
+
+@st.cache_resource
+def load_model_and_features():
+    model = joblib.load(MODEL_PATH)
+    with open(FEATURES_PATH) as f:
+        features = json.load(f)
+    return model, features
+
+
+@st.cache_data
+def load_simulation() -> pd.DataFrame:
+    return pd.read_csv(SIM_PATH)
+
+
+# ── Page stubs (replaced in Tasks 5–7) ────────────────────────────────────────
+
+def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
+    st.header("Tournament Overview")
+    st.write("Coming soon.")
+
+
+def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
+    st.header("Team Deep Dive")
+    st.write("Coming soon.")
+
+
+def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
+    st.header("Match Predictor")
+    st.write("Coming soon.")
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    st.set_page_config(page_title="⚽ WC2026 Predictor", layout="wide", page_icon="⚽")
+    st.title("⚽ WC2026 Predictor")
+
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Tournament Overview", "Team Deep Dive", "Match Predictor"],
+    )
+
+    df_snap               = load_snapshot()
+    df_sim                = load_simulation()
+    model, model_features = load_model_and_features()
+
+    if page == "Tournament Overview":
+        page_overview(df_sim, df_snap)
+    elif page == "Team Deep Dive":
+        page_deep_dive(df_sim, df_snap)
+    else:
+        page_predictor(df_snap, model, model_features)
+
+
+if __name__ == "__main__":
+    main()
