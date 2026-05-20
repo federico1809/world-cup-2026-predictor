@@ -174,7 +174,55 @@ def load_simulation() -> pd.DataFrame:
 
 def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     st.header("Tournament Overview")
-    st.write("Coming soon.")
+
+    display_cols = ["team", "p_champion", "p_final", "p_sf", "p_r16"]
+    df = (
+        df_sim[display_cols]
+        .merge(df_snap[["team", "cluster_name"]], on="team", how="left")
+        .sort_values("p_champion", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    # ── Bar chart: top 15 by P(Champion) ─────────────────────────────────────
+    top15 = df.head(15).copy()
+    top15["P(Champion) %"] = (top15["p_champion"] * 100).round(1)
+    fig_bar = px.bar(
+        top15.sort_values("p_champion"),
+        x="P(Champion) %",
+        y="team",
+        orientation="h",
+        color="cluster_name",
+        color_discrete_map=CLUSTER_COLORS,
+        labels={"team": ""},
+        title="Top 15 Teams — P(Champion)",
+    )
+    fig_bar.update_layout(legend_title="Cluster", height=450)
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ── Styled table ─────────────────────────────────────────────────────────
+    st.subheader("All 48 Teams")
+
+    # Keep floats for sorting; use Styler.format for display, hide cluster column
+    def _row_style(row):
+        color = CLUSTER_COLORS.get(row["cluster_name"], "transparent")
+        return [f"background-color: {color}55; color: inherit"] * len(row)
+
+    pct_cols = ["p_champion", "p_final", "p_sf", "p_r16"]
+    styled = (
+        df.style
+        .apply(_row_style, axis=1)
+        .format({col: "{:.1%}" for col in pct_cols})
+        .hide(axis="columns", subset=["cluster_name"])
+    )
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+
+    # ── Cluster legend ────────────────────────────────────────────────────────
+    cols = st.columns(len(CLUSTER_COLORS))
+    for i, (name, color) in enumerate(CLUSTER_COLORS.items()):
+        cols[i].markdown(
+            f'<span style="background:{color}55; padding:2px 8px; border-radius:4px;">{name}</span>',
+            unsafe_allow_html=True,
+        )
 
 
 def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
