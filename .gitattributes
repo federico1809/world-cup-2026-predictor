@@ -16,3 +16,4 @@
 *.pkl binary
 *.pt binary
 *.db binary
+*.ipynb linguist-documentation=true
