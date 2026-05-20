@@ -66,7 +66,7 @@ def _build_snapshot() -> pd.DataFrame:
             .rename(columns={"home_team": "team", "ranking_home": "ranking"})
         )
         df = df.merge(latest_rank, on="team", how="left")
-        df["ranking"] = df["ranking"].fillna(df["ranking"].median())
+        df["ranking"] = df["ranking"].fillna(latest_rank["ranking"].median())
 
         latest_sq = (
             master.sort_values("date")
@@ -75,7 +75,7 @@ def _build_snapshot() -> pd.DataFrame:
             .rename(columns={"home_team": "team", "squad_value_home": "squad_value"})
         )
         df = df.merge(latest_sq, on="team", how="left")
-        df["squad_value"] = df["squad_value"].fillna(df["squad_value"].median())
+        df["squad_value"] = df["squad_value"].fillna(latest_sq["squad_value"].median())
     else:
         raw_rank = pd.read_csv(RANKING_PATH)
         raw_rank = (
