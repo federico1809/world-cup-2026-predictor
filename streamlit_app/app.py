@@ -202,17 +202,19 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     # ── Styled table ─────────────────────────────────────────────────────────
     st.subheader("All 48 Teams")
 
-    # Keep floats for sorting; use Styler.format for display, hide cluster column
-    def _row_style(row):
-        color = CLUSTER_COLORS.get(row["cluster_name"], "transparent")
-        return [f"background-color: {color}55; color: inherit"] * len(row)
-
     pct_cols = ["p_champion", "p_final", "p_sf", "p_r16"]
+    cluster_series = df["cluster_name"]
+    df_display = df.drop(columns=["cluster_name"])
+
+    def _row_style(row):
+        color = CLUSTER_COLORS.get(cluster_series.iloc[row.name])
+        bg = f"{color}55" if color else "transparent"
+        return [f"background-color: {bg}; color: inherit"] * len(row)
+
     styled = (
-        df.style
+        df_display.style
         .apply(_row_style, axis=1)
         .format({col: "{:.1%}" for col in pct_cols})
-        .hide(axis="columns", subset=["cluster_name"])
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
