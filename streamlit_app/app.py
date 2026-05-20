@@ -229,7 +229,88 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
 
 def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     st.header("Team Deep Dive")
-    st.write("Coming soon.")
+
+    team_order = df_sim.sort_values("p_champion", ascending=False)["team"].tolist()
+    selected   = st.selectbox("Select a team", team_order)
+
+    snap = df_snap[df_snap["team"] == selected].iloc[0]
+    sim  = df_sim[df_sim["team"]   == selected].iloc[0]
+
+    # ── Metric cards ──────────────────────────────────────────────────────────
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Elo", f"{snap['elo']:.0f}")
+    c2.metric("FIFA Ranking", f"{int(snap['ranking'])}")
+    sv = float(snap["squad_value"])
+    sv_label = f"€{sv:.0f}M" if sv > 1.0 else "N/A"
+    c3.metric("Squad Value", sv_label)
+    c4.metric("Cluster", snap["cluster_name"])
+    c5.metric("Form Win Rate (10)", f"{snap['form_10_win_rate']:.1%}")
+
+    # ── Comparison chart: selected team vs tournament average ─────────────────
+    st.subheader("vs. Tournament Average (normalized 0–1)")
+
+    metric_cols = {
+        "Elo":                "elo",
+        "Win Rate (10)":      "form_10_win_rate",
+        "Goals Scored (10)":  "form_10_goals_scored_avg",
+        "Goal Diff (10)":     "form_10_goal_diff_avg",
+    }
+    rows = []
+    for label, col in metric_cols.items():
+        vals = df_snap[col].astype(float)
+        lo, hi = vals.min(), vals.max()
+        denom = (hi - lo) or 1e-9
+        rows.append({
+            "Metric":            label,
+            "Selected Team":     float((snap[col] - lo) / denom),
+            "Tournament Average": float((vals.mean() - lo) / denom),
+        })
+
+    # Ranking is inverted: rank 1 = best, so normalize then flip
+    ranks = df_snap["ranking"].astype(float)
+    lo, hi = ranks.min(), ranks.max()
+    denom = (hi - lo) or 1e-9
+    rows.append({
+        "Metric":            "FIFA Ranking (inv.)",
+        "Selected Team":     float(1.0 - (snap["ranking"] - lo) / denom),
+        "Tournament Average": float(1.0 - (ranks.mean() - lo) / denom),
+    })
+
+    df_cmp = pd.DataFrame(rows).melt(
+        id_vars="Metric", var_name="Source", value_name="Score"
+    )
+    fig_cmp = px.bar(
+        df_cmp,
+        x="Score", y="Metric", color="Source",
+        orientation="h", barmode="group",
+        title=f"{selected} vs. Tournament Average",
+        range_x=[0, 1],
+        color_discrete_sequence=["#1f77b4", "#aec7e8"],
+    )
+    st.plotly_chart(fig_cmp, use_container_width=True)
+
+    # ── Probability funnel ────────────────────────────────────────────────────
+    st.subheader("Tournament Probabilities")
+    prob_data = {
+        "Round of 16": float(sim["p_r16"]),
+        "Semi-Final":  float(sim["p_sf"]),
+        "Final":       float(sim["p_final"]),
+        "Champion":    float(sim["p_champion"]),
+    }
+    df_prob = pd.DataFrame({
+        "Round":       list(prob_data.keys()),
+        "Probability": list(prob_data.values()),
+    })
+    fig_prob = px.bar(
+        df_prob, x="Round", y="Probability",
+        text=[f"{v:.1%}" for v in prob_data.values()],
+        color="Probability",
+        color_continuous_scale="Blues",
+        title=f"{selected} — Path to the Title",
+    )
+    fig_prob.update_traces(textposition="outside")
+    fig_prob.update_layout(showlegend=False, yaxis_tickformat=".0%")
+    st.plotly_chart(fig_prob, use_container_width=True)
 
 
 def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
