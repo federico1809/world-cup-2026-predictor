@@ -259,7 +259,7 @@ def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     for label, col in metric_cols.items():
         vals = df_snap[col].astype(float)
         lo, hi = vals.min(), vals.max()
-        denom = (hi - lo) or 1e-9
+        denom = max(float(hi - lo), 1e-9)
         rows.append({
             "Metric":            label,
             "Selected Team":     float((snap[col] - lo) / denom),
@@ -269,7 +269,7 @@ def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     # Ranking is inverted: rank 1 = best, so normalize then flip
     ranks = df_snap["ranking"].astype(float)
     lo, hi = ranks.min(), ranks.max()
-    denom = (hi - lo) or 1e-9
+    denom = max(float(hi - lo), 1e-9)
     rows.append({
         "Metric":            "FIFA Ranking (inv.)",
         "Selected Team":     float(1.0 - (snap["ranking"] - lo) / denom),
@@ -291,10 +291,16 @@ def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
 
     # ── Probability funnel ────────────────────────────────────────────────────
     st.subheader("Tournament Probabilities")
+    # Cumulative "reach at least X" probabilities — monotone across all teams
+    p_r16_reach   = float(sim["p_r16"])   + float(sim["p_qf"]) + float(sim["p_sf"]) + float(sim["p_third"]) + float(sim["p_final"]) + float(sim["p_champion"])
+    p_qf_reach    = float(sim["p_qf"])    + float(sim["p_sf"]) + float(sim["p_third"]) + float(sim["p_final"]) + float(sim["p_champion"])
+    p_sf_reach    = float(sim["p_sf"])    + float(sim["p_third"]) + float(sim["p_final"]) + float(sim["p_champion"])
+    p_final_reach = float(sim["p_final"]) + float(sim["p_champion"])
     prob_data = {
-        "Round of 16": float(sim["p_r16"]),
-        "Semi-Final":  float(sim["p_sf"]),
-        "Final":       float(sim["p_final"]),
+        "Reach R16":   p_r16_reach,
+        "Reach QF":    p_qf_reach,
+        "Reach SF":    p_sf_reach,
+        "Reach Final": p_final_reach,
         "Champion":    float(sim["p_champion"]),
     }
     df_prob = pd.DataFrame({
@@ -309,7 +315,7 @@ def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
         title=f"{selected} — Path to the Title",
     )
     fig_prob.update_traces(textposition="outside")
-    fig_prob.update_layout(showlegend=False, yaxis_tickformat=".0%")
+    fig_prob.update_layout(showlegend=False, yaxis_tickformat=".0%", margin=dict(t=40))
     st.plotly_chart(fig_prob, use_container_width=True)
 
 
