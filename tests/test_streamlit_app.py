@@ -13,6 +13,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+_SNAPSHOT = ROOT / "data" / "processed" / "team_snapshot_clustered.parquet"
+_SKIP_IF_NO_DATA = pytest.mark.skipif(
+    not _SNAPSHOT.exists(), reason="team_snapshot_clustered.parquet not available in CI"
+)
+
 
 @pytest.fixture(scope="module")
 def snapshot():
@@ -26,10 +31,12 @@ def model_features():
         return json.load(f)
 
 
+@_SKIP_IF_NO_DATA
 def test_snapshot_row_count(snapshot):
     assert len(snapshot) == 48
 
 
+@_SKIP_IF_NO_DATA
 def test_snapshot_required_columns(snapshot):
     required = {
         "team", "elo", "cluster_name", "cluster_enc",
@@ -39,15 +46,18 @@ def test_snapshot_required_columns(snapshot):
     assert required.issubset(set(snapshot.columns))
 
 
+@_SKIP_IF_NO_DATA
 def test_snapshot_no_nulls_in_key_cols(snapshot):
     for col in ["elo", "ranking", "squad_value", "cluster_enc"]:
         assert snapshot[col].isna().sum() == 0, f"NaNs found in column: {col}"
 
 
+@_SKIP_IF_NO_DATA
 def test_snapshot_cluster_enc_range(snapshot):
     assert snapshot["cluster_enc"].between(0, 4).all()
 
 
+@_SKIP_IF_NO_DATA
 def test_build_match_features_shape(snapshot, model_features):
     from streamlit_app.app import _build_match_features_vec
     teams = snapshot["team"].tolist()
@@ -55,6 +65,7 @@ def test_build_match_features_shape(snapshot, model_features):
     assert vec.shape == (1, 93)
 
 
+@_SKIP_IF_NO_DATA
 def test_build_match_features_no_nan(snapshot, model_features):
     from streamlit_app.app import _build_match_features_vec
     teams = snapshot["team"].tolist()
