@@ -207,9 +207,13 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     df_display = df.drop(columns=["cluster_name"])
 
     def _row_style(row):
-        color = CLUSTER_COLORS.get(cluster_series.iloc[row.name])
-        bg = f"{color}55" if color else "transparent"
-        return [f"background-color: {bg}; color: inherit"] * len(row)
+        hex_color = CLUSTER_COLORS.get(cluster_series.iloc[row.name], "")
+        if not hex_color:
+            return [""] * len(row)
+        r = int(hex_color[1:3], 16)
+        g = int(hex_color[3:5], 16)
+        b = int(hex_color[5:7], 16)
+        return [f"background-color: rgba({r},{g},{b},0.33)"] * len(row)
 
     styled = (
         df_display.style
