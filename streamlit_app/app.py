@@ -321,7 +321,72 @@ def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
 
 def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
     st.header("Match Predictor")
-    st.write("Coming soon.")
+    st.caption(
+        "Assumes neutral venue · 30 rest days per side · World Cup importance (tier 3) · "
+        "H2H features zeroed (all WC2026 group-stage matchups are novel)."
+    )
+
+    teams = sorted(df_snap["team"].tolist())
+    col1, col2 = st.columns(2)
+    home = col1.selectbox("Home Team", teams, index=0,  key="pred_home")
+    away = col2.selectbox("Away Team", teams, index=1,  key="pred_away")
+
+    if st.button("Predict", type="primary"):
+        if home == away:
+            st.warning("Please select two different teams.")
+            return
+
+        vec   = _build_match_features_vec(df_snap, model_features, home, away)
+        probs = model.predict_proba(vec)[0]
+
+        # model.classes_ = ['away', 'draw', 'home'] — use dict to be order-safe
+        class_map = dict(zip(model.classes_, probs))
+        p_home = float(class_map.get("home", probs[2]))
+        p_draw = float(class_map.get("draw", probs[1]))
+        p_away = float(class_map.get("away", probs[0]))
+
+        st.subheader(f"{home} vs. {away}")
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"{home} Win", f"{p_home:.1%}")
+        c2.metric("Draw",        f"{p_draw:.1%}")
+        c3.metric(f"{away} Win", f"{p_away:.1%}")
+
+        # Stacked horizontal bar
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=[p_home], y=[""], orientation="h",
+            name=f"{home} Win",
+            marker_color="#1f77b4",
+            text=f" {p_home:.1%}",
+            textposition="inside",
+            insidetextanchor="start",
+        ))
+        fig.add_trace(go.Bar(
+            x=[p_draw], y=[""], orientation="h",
+            name="Draw",
+            marker_color="#aec7e8",
+            text=f" Draw {p_draw:.1%}",
+            textposition="inside",
+            insidetextanchor="middle",
+        ))
+        fig.add_trace(go.Bar(
+            x=[p_away], y=[""], orientation="h",
+            name=f"{away} Win",
+            marker_color="#ff7f0e",
+            text=f" {p_away:.1%}",
+            textposition="inside",
+            insidetextanchor="end",
+        ))
+        fig.update_layout(
+            barmode="stack",
+            height=120,
+            xaxis=dict(range=[0, 1], tickformat=".0%", title=""),
+            yaxis=dict(showticklabels=False),
+            margin=dict(l=0, r=0, t=10, b=30),
+            legend=dict(orientation="h", y=-0.8),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
