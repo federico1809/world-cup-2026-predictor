@@ -163,3 +163,4 @@ cython_debug/
 outputs/figures/*.png
 outputs/predictions/*
 !outputs/predictions/*.csv
+.claude/
