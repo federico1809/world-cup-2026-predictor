@@ -339,11 +339,8 @@ def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
         vec   = _build_match_features_vec(df_snap, model_features, home, away)
         probs = model.predict_proba(vec)[0]
 
-        # model.classes_ = ['away', 'draw', 'home'] — use dict to be order-safe
-        class_map = dict(zip(model.classes_, probs))
-        p_home = float(class_map.get("home", probs[2]))
-        p_draw = float(class_map.get("draw", probs[1]))
-        p_away = float(class_map.get("away", probs[0]))
+        # trained with integer targets: 0=away, 1=draw, 2=home (alphabetical)
+        p_away, p_draw, p_home = float(probs[0]), float(probs[1]), float(probs[2])
 
         st.subheader(f"{home} vs. {away}")
 
@@ -358,15 +355,15 @@ def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
             x=[p_home], y=[""], orientation="h",
             name=f"{home} Win",
             marker_color="#1f77b4",
-            text=f" {p_home:.1%}",
+            text=f"{p_home:.1%}",
             textposition="inside",
-            insidetextanchor="start",
+            insidetextanchor="middle",
         ))
         fig.add_trace(go.Bar(
             x=[p_draw], y=[""], orientation="h",
             name="Draw",
             marker_color="#aec7e8",
-            text=f" Draw {p_draw:.1%}",
+            text=f"Draw {p_draw:.1%}",
             textposition="inside",
             insidetextanchor="middle",
         ))
@@ -374,9 +371,9 @@ def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
             x=[p_away], y=[""], orientation="h",
             name=f"{away} Win",
             marker_color="#ff7f0e",
-            text=f" {p_away:.1%}",
+            text=f"{p_away:.1%}",
             textposition="inside",
-            insidetextanchor="end",
+            insidetextanchor="middle",
         ))
         fig.update_layout(
             barmode="stack",
