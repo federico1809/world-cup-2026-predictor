@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 _SNAPSHOT = ROOT / "data" / "processed" / "team_snapshot_clustered.parquet"
 _SKIP_IF_NO_DATA = pytest.mark.skipif(
-    not _SNAPSHOT.exists(), reason="team_snapshot_clustered.parquet not available in CI"
+    not (_SNAPSHOT.exists() and (ROOT / 'data' / 'raw' / 'cashncarry_rankings' / 'fifa_ranking-2024-04-04.csv').exists()), reason="team_snapshot_clustered.parquet not available in CI"
 )
 
 
