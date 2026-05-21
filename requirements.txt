@@ -15,6 +15,7 @@ torch
 matplotlib
 seaborn
 plotly
+streamlit
 # --- Notebooks ---
 jupyterlab
 notebook
