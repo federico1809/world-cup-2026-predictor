@@ -190,17 +190,27 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     top15 = df.head(15).copy()
     top15["P(Champion) %"] = (top15["p_champion"] * 100).round(1)
     top15_sorted = top15.sort_values("p_champion", ascending=True)
-    fig_bar = px.bar(
-        top15_sorted,
-        x="P(Champion) %",
-        y="team",
-        orientation="h",
-        color="cluster_name",
-        color_discrete_map=CLUSTER_COLORS,
-        labels={"team": ""},
+    fig_bar = go.Figure()
+    for cluster, color in CLUSTER_COLORS.items():
+        subset = top15_sorted[top15_sorted["cluster_name"] == cluster]
+        if subset.empty:
+            continue
+        fig_bar.add_trace(go.Bar(
+            x=subset["P(Champion) %"],
+            y=subset["team"],
+            orientation="h",
+            name=cluster,
+            marker_color=color,
+        ))
+    fig_bar.update_layout(
         title="Top 15 Teams — P(Champion)",
+        legend_title="Cluster",
+        height=450,
+        yaxis=dict(
+            categoryorder="array",
+            categoryarray=top15_sorted["team"].tolist(),
+        ),
     )
-    fig_bar.update_layout(legend_title="Cluster", height=450)
     fig_bar.update_xaxes(tickformat=".1f", title_text="P(Champion) %", rangemode="tozero")
     st.plotly_chart(fig_bar, use_container_width=True)
 
