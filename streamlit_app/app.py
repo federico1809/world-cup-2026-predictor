@@ -189,8 +189,9 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     # ── Bar chart: top 15 by P(Champion) ─────────────────────────────────────
     top15 = df.head(15).copy()
     top15["P(Champion) %"] = (top15["p_champion"] * 100).round(1)
+    top15_sorted = top15.sort_values("p_champion", ascending=True)
     fig_bar = px.bar(
-        top15.sort_values("p_champion"),
+        top15_sorted,
         x="P(Champion) %",
         y="team",
         orientation="h",
@@ -198,6 +199,7 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
         color_discrete_map=CLUSTER_COLORS,
         labels={"team": ""},
         title="Top 15 Teams — P(Champion)",
+        category_orders={"team": top15_sorted["team"].tolist()},
     )
     fig_bar.update_layout(legend_title="Cluster", height=450)
     fig_bar.update_xaxes(tickformat=".1f", title_text="P(Champion) %", rangemode="tozero")
