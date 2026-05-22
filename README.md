@@ -6,6 +6,8 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Status](https://img.shields.io/badge/Status-In%20Development-orange)
 
+🔴 **Live dashboard:** [world-cup-2026-predictor-board.streamlit.app](https://world-cup-2026-predictor-board.streamlit.app)
+
 ---
 
 ## 🎯 What This Project Predicts
@@ -61,6 +63,7 @@ dashboard + static notebook visualizations.
     ├── outputs/
     │   ├── figures/              Generated plots (gitignored)
     │   └── predictions/          Tournament simulation results
+    ├── streamlit_app/            Interactive dashboard (app.py)
     ├── world_cup_2026/
     │   ├── data_ingestion/       Download pipeline and normalization
     │   ├── features/             Elo, H2H, form feature modules
@@ -87,7 +90,7 @@ dashboard + static notebook visualizations.
 
 ## 🔬 Feature Engineering
 
-### Implemented (master_features.parquet — 9,796 × 97)
+### Implemented (master_features.parquet — 9,796 × 98)
 
 | Module | File | Description |
 |--------|------|-------------|
@@ -202,6 +205,22 @@ dashboard + static notebook visualizations.
     pip install -r requirements.txt
     python -m world_cup_2026.data_ingestion.download
 
+### Run the dashboard locally
+
+    streamlit run streamlit_app/app.py
+
+Or visit the live version: [world-cup-2026-predictor-board.streamlit.app](https://world-cup-2026-predictor-board.streamlit.app)
+
+### Run simulations
+
+    python -m world_cup_2026.simulation.simulate
+
+Results saved to `outputs/predictions/simulation_results.csv`.
+
+### Retrain the model
+
+    python -m world_cup_2026.modeling.train
+
 ---
 
 ## 🗂️ Development Status
@@ -221,13 +240,15 @@ dashboard + static notebook visualizations.
 | Unsupervised clustering (k=4) | ✅ Done |
 | Supervised modeling (XGBoost, 93 features) | ✅ Done |
 | Monte Carlo simulation (10,000 runs) | ✅ Done |
-| Streamlit dashboard | ⏳ Pending |
+| Streamlit dashboard (deployed) | ✅ Done |
+| MLP / Stacking Ensemble | ⏳ Pending |
+| Mid-tournament retraining | ⏳ Pending |
 
 ---
 
 ## 👤 Author
 
-Federico Ceballos Torres — Data Scientist  
+Federico Ceballos Torres — Data Scientist
 GitHub: https://github.com/federico1809
 
 ---
