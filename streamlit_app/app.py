@@ -200,6 +200,7 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
         title="Top 15 Teams — P(Champion)",
     )
     fig_bar.update_layout(legend_title="Cluster", height=450)
+    fig_bar.update_xaxes(tickformat=".1f", title_text="P(Champion) %", rangemode="tozero")
     st.plotly_chart(fig_bar, use_container_width=True)
 
     # ── Styled table ─────────────────────────────────────────────────────────
@@ -207,7 +208,7 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
 
     pct_cols = ["p_champion", "p_final", "p_sf", "p_r16"]
     cluster_series = df["cluster_name"]
-    df_display = df.drop(columns=["cluster_name"])
+    df_display = df.drop(columns=["cluster_name"]).sort_values("p_champion", ascending=False).reset_index(drop=True)
 
     def _row_style(row):
         hex_color = CLUSTER_COLORS.get(cluster_series.iloc[row.name], "")
