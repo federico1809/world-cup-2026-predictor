@@ -56,8 +56,8 @@ dashboard + static notebook visualizations.
     ├── models/                   Serialized trained models and encoders
     ├── notebooks/
     │   ├── 01_eda/               Exploratory Data Analysis
-    │   ├── 02_features/          Feature Engineering
-    │   ├── 03_unsupervised/      Clustering and PCA
+    │   ├── 02_features/          Feature Engineering (reference — use build_features.py)
+    │   ├── 03_unsupervised/      Clustering and PCA (reference — use build_snapshot.py)
     │   ├── 04_modeling/          Supervised modeling and evaluation
     │   └── 05_simulation/        Monte Carlo tournament simulation
     ├── outputs/
@@ -66,9 +66,16 @@ dashboard + static notebook visualizations.
     ├── streamlit_app/            Interactive dashboard (app.py)
     ├── world_cup_2026/
     │   ├── data_ingestion/       Download pipeline and normalization
-    │   ├── features/             Elo, H2H, form feature modules
-    │   ├── modeling/             Training and inference
-    │   └── simulation/           Monte Carlo engine
+    │   ├── features/
+    │   │   ├── build_features.py     Feature matrix pipeline (replaces notebook 02)
+    │   │   ├── build_snapshot.py     Team snapshot + clustering (replaces notebook 03)
+    │   │   ├── elo.py                Elo rating calculator
+    │   │   ├── form.py               Recent form features
+    │   │   └── h2h.py                Head-to-head + transitive features
+    │   ├── modeling/
+    │   │   └── train.py              XGBoost training script
+    │   └── simulation/
+    │       └── simulate.py           Monte Carlo simulation engine
     └── tests/
 
 ---
@@ -102,7 +109,7 @@ dashboard + static notebook visualizations.
 | Squad market value | Transfermarkt | squad_value_home, squad_value_away, squad_value_diff |
 | Rest days | match dates | Days since last match per team — defaults to 30 for WC2026 |
 | Match importance | tournament tier | Tier encoding 0–3 — World Cup fixed at 3 (highest) |
-| Cluster label | notebook 03 | KMeans cluster assignment (Elite / Mid-Tier / Underdogs) |
+| Cluster label | build_snapshot.py | KMeans cluster assignment (Elite / Mid-Tier / Underdogs) |
 
 ### Planned
 
@@ -141,17 +148,17 @@ dashboard + static notebook visualizations.
 | Method | Output | Status |
 |--------|--------|--------|
 | K-Means (k=4) | Cluster labels for 48 WC2026 teams | ✅ Done |
-| PCA 2D | Visualization + variance analysis (79.1% in 2 components) | ✅ Done |
-| Anomaly detection | Distance to centroid — Ecuador, Qatar flagged | ✅ Done |
+| PCA 2D | Visualization + variance analysis (80.4% in 2 components) | ✅ Done |
+| Anomaly detection | Distance to centroid — 3 teams flagged | ✅ Done |
 
 **Cluster results:**
 
 | Cluster | Name | n | Avg Elo | Form WR |
 |---------|------|---|---------|---------|
-| 1 | Elite | 16 | 1983 | 0.72 |
-| 0 | Consolidated Mid-Tier | 12 | 1847 | 0.38 |
-| 2 | Dynamic Mid-Tier | 14 | 1828 | 0.54 |
-| 3 | Underdogs | 6 | 1679 | 0.32 |
+| Elite | Elite | 11 | 2014 | 0.72 |
+| Consolidated Mid-Tier | Consolidated Mid-Tier | 20 | 1809 | 0.47 |
+| Dynamic Mid-Tier | Dynamic Mid-Tier | 7 | 1924 | 0.70 |
+| Underdogs | Underdogs | 10 | 1775 | 0.34 |
 
 ### Monte Carlo simulation
 
@@ -165,18 +172,18 @@ dashboard + static notebook visualizations.
 
 ## 🏆 Current Tournament Predictions (10,000 simulations)
 
-| # | Team | P(R16) | P(SF) | P(Final) | P(Champion) |
-|---|------|--------|-------|----------|-------------|
-| 1 | Croatia | 14.85% | 2.29% | 3.56% | 4.33% |
-| 2 | Argentina | 17.58% | 1.96% | 3.41% | 4.28% |
-| 3 | Spain | 19.27% | 2.26% | 3.24% | 3.69% |
-| 4 | Uruguay | 18.60% | 2.19% | 2.65% | 3.48% |
-| 5 | Switzerland | 24.51% | 2.31% | 2.54% | 3.36% |
-| 6 | France | 15.79% | 3.47% | 3.07% | 3.35% |
-| 7 | Colombia | 15.19% | 2.33% | 2.71% | 3.22% |
-| 8 | Portugal | 11.75% | 1.82% | 2.37% | 3.18% |
-| 9 | England | 15.53% | 2.21% | 2.61% | 2.86% |
-| 10 | Belgium | 20.01% | 1.45% | 2.36% | 2.82% |
+| # | Team | P(R16) | P(QF) | P(SF) | P(Final) | P(Champion) |
+|---|------|--------|-------|-------|----------|-------------|
+| 1 | Croatia | 14.85% | 12.74% | 2.29% | 3.56% | 4.33% |
+| 2 | Argentina | 17.58% | 9.56% | 1.96% | 3.41% | 4.28% |
+| 3 | Spain | 19.27% | 9.91% | 2.26% | 3.24% | 3.69% |
+| 4 | Uruguay | 18.60% | 10.04% | 2.19% | 2.65% | 3.48% |
+| 5 | Switzerland | 24.51% | 9.22% | 2.31% | 2.54% | 3.36% |
+| 6 | France | 15.79% | 11.76% | 3.47% | 3.07% | 3.35% |
+| 7 | Colombia | 15.19% | 9.06% | 2.33% | 2.71% | 3.22% |
+| 8 | Portugal | 11.75% | 8.11% | 1.82% | 2.37% | 3.18% |
+| 9 | England | 15.53% | 8.88% | 2.21% | 2.61% | 2.86% |
+| 10 | Belgium | 20.01% | 8.53% | 1.45% | 2.36% | 2.82% |
 
 *Full results in `outputs/predictions/simulation_results.csv`*
 
@@ -205,21 +212,18 @@ dashboard + static notebook visualizations.
     pip install -r requirements.txt
     python -m world_cup_2026.data_ingestion.download
 
-### Run the dashboard locally
+### Run the full pipeline (no notebooks required)
+
+    python -m world_cup_2026.features.build_features   # ~17 min — builds master_features.parquet
+    python -m world_cup_2026.features.build_snapshot   # ~11 sec — builds team_snapshot_clustered.parquet
+    python -m world_cup_2026.modeling.train             # ~5 min  — trains XGBoost model
+    python -m world_cup_2026.simulation.simulate        # ~12 min — runs 10k Monte Carlo simulations
+
+### Run the dashboard
 
     streamlit run streamlit_app/app.py
 
 Or visit the live version: [world-cup-2026-predictor-board.streamlit.app](https://world-cup-2026-predictor-board.streamlit.app)
-
-### Run simulations
-
-    python -m world_cup_2026.simulation.simulate
-
-Results saved to `outputs/predictions/simulation_results.csv`.
-
-### Retrain the model
-
-    python -m world_cup_2026.modeling.train
 
 ---
 
@@ -241,6 +245,7 @@ Results saved to `outputs/predictions/simulation_results.csv`.
 | Supervised modeling (XGBoost, 93 features) | ✅ Done |
 | Monte Carlo simulation (10,000 runs) | ✅ Done |
 | Streamlit dashboard (deployed) | ✅ Done |
+| Notebook-free pipeline (build_features + build_snapshot) | ✅ Done |
 | MLP / Stacking Ensemble | ⏳ Pending |
 | Mid-tournament retraining | ⏳ Pending |
 
