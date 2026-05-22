@@ -77,15 +77,18 @@ def _build_snapshot() -> pd.DataFrame:
         df = df.merge(latest_sq, on="team", how="left")
         df["squad_value"] = df["squad_value"].fillna(latest_sq["squad_value"].median())
     else:
-        raw_rank = pd.read_csv(RANKING_PATH)
-        raw_rank = (
-            raw_rank.sort_values("rank_date")
-            .groupby("country_full").last()
-            .reset_index()[["country_full", "rank"]]
-            .rename(columns={"country_full": "team", "rank": "ranking"})
-        )
-        df = df.merge(raw_rank, on="team", how="left")
-        df["ranking"] = df["ranking"].fillna(df["ranking"].median())
+        if RANKING_PATH.exists():
+            raw_rank = (
+                pd.read_csv(RANKING_PATH)
+                .sort_values("rank_date")
+                .groupby("country_full").last()
+                .reset_index()[["country_full", "rank"]]
+                .rename(columns={"country_full": "team", "rank": "ranking"})
+            )
+            df = df.merge(raw_rank, on="team", how="left")
+            df["ranking"] = df["ranking"].fillna(200)
+        else:
+            df["ranking"] = 200
         df["squad_value"] = 1.0
 
     return df.reset_index(drop=True)
