@@ -178,7 +178,7 @@ def load_simulation() -> pd.DataFrame:
 def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     st.header("Tournament Overview")
 
-    display_cols = ["team", "p_champion", "p_final", "p_sf", "p_qf", "p_r16"]
+    display_cols = ["team", "p_champion", "p_final", "p_sf", "p_qf", "p_r16", "p_r32"]
     df = (
         df_sim[display_cols]
         .merge(df_snap[["team", "cluster_name"]], on="team", how="left")
@@ -217,7 +217,7 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     # ── Styled table ─────────────────────────────────────────────────────────
     st.subheader("All 48 Teams")
 
-    pct_cols = ["p_champion", "p_final", "p_sf", "p_qf", "p_r16"]
+    pct_cols = ["p_champion", "p_final", "p_sf", "p_qf", "p_r16", "p_r32"]
     cluster_series = df["cluster_name"]
     df_display = df.drop(columns=["cluster_name"]).sort_values("p_champion", ascending=False).reset_index(drop=True)
 
