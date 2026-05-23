@@ -233,7 +233,7 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     styled = (
         df_display.style
         .apply(_row_style, axis=1)
-        .format({col: "{:.1%}" for col in pct_cols})
+        .format({col: "{:.2%}" for col in pct_cols})
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
