@@ -1,20 +1,25 @@
 """
 extractor.py
 ------------
-Use the Anthropic Claude API to extract structured football predictions
+Use the Google Gemini API to extract structured football predictions
 from article text.
 
-IMPORTANT: ANTHROPIC_API_KEY must be set as an environment variable before
+IMPORTANT: GEMINI_API_KEY must be set as an environment variable before
 running this module. Copy .env.example to .env and fill in your key, or
-export it in your shell: export ANTHROPIC_API_KEY=sk-ant-...
+export it in your shell: export GEMINI_API_KEY=AIza-...
 """
 from __future__ import annotations
 
 import json
+import os
 
-import anthropic
 import pandas as pd
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from loguru import logger
+
+load_dotenv()
 
 from world_cup_2026.config import RAW_DATA_DIR
 from world_cup_2026.data_ingestion.normalize import normalize_team_name
@@ -43,7 +48,7 @@ _VALID_PREDICTION_TYPES = frozenset({
 })
 _VALID_CONFIDENCES = frozenset({"certain", "likely", "possible", "unlikely"})
 
-_MODEL = "claude-sonnet-4-20250514"
+_MODEL = "gemini-2.0-flash"
 _MAX_TEXT_CHARS = 12_000
 
 _SYSTEM_PROMPT = (
@@ -66,7 +71,7 @@ _SYSTEM_PROMPT = (
 def extract_predictions(article: dict) -> list[dict]:
     """Extract structured team predictions from a scraped article dict.
 
-    Calls the Anthropic API (reads ANTHROPIC_API_KEY from environment),
+    Calls the Gemini API (reads GEMINI_API_KEY from environment),
     parses the JSON response, normalizes team names, and filters out teams
     not participating in WC2026.
 
@@ -79,7 +84,7 @@ def extract_predictions(article: dict) -> list[dict]:
         team, prediction_type, confidence, sentiment, quote,
         source, date, url.
     """
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from environment
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))  # reads GEMINI_API_KEY from environment
 
     text_snippet = article["text"][:_MAX_TEXT_CHARS]
     user_message = f"Article title: {article['title']}\n\n{text_snippet}"
@@ -87,15 +92,14 @@ def extract_predictions(article: dict) -> list[dict]:
     logger.info(f"Extracting predictions from: {article['source_domain']}")
 
     try:
-        response = client.messages.create(
+        response = client.models.generate_content(
             model=_MODEL,
-            max_tokens=4096,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
+            contents=user_message,
+            config=types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT),
         )
-        raw_json = response.content[0].text.strip()
-    except anthropic.APIError as e:
-        logger.error(f"Anthropic API error for {article['url']}: {e}")
+        raw_json = response.text.strip()
+    except Exception as e:
+        logger.error(f"Gemini API error for {article['url']}: {e}")
         return []
 
     try:

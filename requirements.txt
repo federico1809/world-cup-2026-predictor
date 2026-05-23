@@ -40,6 +40,6 @@ typer
 loguru
 requests
 beautifulsoup4
-anthropic
+google-genai
 # --- Editable install ---
 -e .
