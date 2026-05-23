@@ -233,7 +233,7 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     styled = (
         df_display.style
         .apply(_row_style, axis=1)
-        .format({col: "{:.1%}" for col in pct_cols})
+        .format({col: "{:.2%}" for col in pct_cols})
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -340,41 +340,51 @@ def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
 
 def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
     st.header("Match Predictor")
+    st.write(
+        "Select any two teams to get a match outcome probability. "
+        "The model uses 93 features built from historical and current team stats."
+    )
     st.caption(
-        "Assumes neutral venue · 30 rest days per side · World Cup importance (tier 3) · "
+        "Assumes 30 rest days per side · World Cup importance (tier 3) · "
         "H2H features zeroed (all WC2026 group-stage matchups are novel)."
     )
 
     teams = sorted(df_snap["team"].tolist())
     col1, col2 = st.columns(2)
-    home = col1.selectbox("Home Team", teams, index=0,  key="pred_home")
-    away = col2.selectbox("Away Team", teams, index=1,  key="pred_away")
+    team1 = col1.selectbox("Team 1", teams, index=0, key="pred_team1")
+    team2 = col2.selectbox("Team 2", teams, index=1, key="pred_team2")
+    st.caption("⚽ Neutral ground prediction — result is independent of team order.")
 
     if st.button("Predict", type="primary"):
-        if home == away:
+        if team1 == team2:
             st.warning("Please select two different teams.")
             return
 
-        vec   = _build_match_features_vec(df_snap, model_features, home, away)
-        probs = model.predict_proba(vec)[0]
+        # Run model in both orderings and average for a symmetric, order-independent result.
+        # Trained targets: 0=away win, 1=draw, 2=home win
+        vec1 = _build_match_features_vec(df_snap, model_features, team1, team2)
+        vec2 = _build_match_features_vec(df_snap, model_features, team2, team1)
+        p1   = model.predict_proba(vec1)[0]   # [team2 win, draw, team1 win]
+        p2   = model.predict_proba(vec2)[0]   # [team1 win, draw, team2 win]
 
-        # trained with integer targets: 0=away, 1=draw, 2=home (alphabetical)
-        p_away, p_draw, p_home = float(probs[0]), float(probs[1]), float(probs[2])
+        p_team1 = (float(p1[2]) + float(p2[0])) / 2
+        p_draw  = (float(p1[1]) + float(p2[1])) / 2
+        p_team2 = (float(p1[0]) + float(p2[2])) / 2
 
-        st.subheader(f"{home} vs. {away}")
+        st.subheader(f"{team1} vs. {team2}")
 
         c1, c2, c3 = st.columns(3)
-        c1.metric(f"{home} Win", f"{p_home:.1%}")
-        c2.metric("Draw",        f"{p_draw:.1%}")
-        c3.metric(f"{away} Win", f"{p_away:.1%}")
+        c1.metric(f"{team1} Win", f"{p_team1:.1%}")
+        c2.metric("Draw",         f"{p_draw:.1%}")
+        c3.metric(f"{team2} Win", f"{p_team2:.1%}")
 
         # Stacked horizontal bar
         fig = go.Figure()
         fig.add_trace(go.Bar(
-            x=[p_home], y=[""], orientation="h",
-            name=f"{home} Win",
+            x=[p_team1], y=[""], orientation="h",
+            name=f"{team1} Win",
             marker_color="#1f77b4",
-            text=f"{p_home:.1%}",
+            text=f"{p_team1:.1%}",
             textposition="inside",
             insidetextanchor="middle",
         ))
@@ -387,10 +397,10 @@ def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
             insidetextanchor="middle",
         ))
         fig.add_trace(go.Bar(
-            x=[p_away], y=[""], orientation="h",
-            name=f"{away} Win",
+            x=[p_team2], y=[""], orientation="h",
+            name=f"{team2} Win",
             marker_color="#ff7f0e",
-            text=f"{p_away:.1%}",
+            text=f"{p_team2:.1%}",
             textposition="inside",
             insidetextanchor="middle",
         ))
