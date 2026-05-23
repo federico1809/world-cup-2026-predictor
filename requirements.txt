@@ -40,5 +40,6 @@ typer
 loguru
 requests
 beautifulsoup4
+anthropic
 # --- Editable install ---
 -e .
