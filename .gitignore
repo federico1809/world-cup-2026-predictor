@@ -10,6 +10,9 @@
 /data/interim/
 /data/processed/
 !data/processed/*.parquet
+/data/expert_opinions/raw/
+/data/expert_opinions/processed/
+/data/expert_opinions/urls.txt
 # Mac OS-specific storage files
 .DS_Store
 # vim
