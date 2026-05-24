@@ -98,6 +98,10 @@ def extract_predictions(article: dict) -> list[dict]:
             config=types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT),
         )
         raw_json = response.text.strip()
+        # Strip markdown code fences that some model versions add despite instructions
+        if raw_json.startswith("```"):
+            raw_json = raw_json.split("\n", 1)[-1]
+            raw_json = raw_json.rsplit("```", 1)[0].strip()
     except Exception as e:
         logger.error(f"Gemini API error for {article['url']}: {e}")
         return []
