@@ -90,6 +90,22 @@ def _is_recent_enough(raw_date: str, cutoff: datetime.datetime) -> bool:
     return parsed >= cutoff
 
 
+def decode_google_news_url(url: str) -> str:
+    """Resolve a Google News tracking URL to the real article URL.
+    Returns the original URL unchanged if decoding fails.
+    """
+    if "news.google.com" not in url:
+        return url
+    try:
+        from googlenewsdecoder import gnewsdecoder
+        result = gnewsdecoder(url)
+        if result.get("status") == True and result.get("decoded_url"):  # noqa: E712
+            return result["decoded_url"]
+    except Exception as e:
+        logger.warning(f"Could not decode Google News URL: {url} — {e}")
+    return url
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -106,6 +122,8 @@ def main(
     cutoff = datetime.datetime(*_START_DATE)
     today = datetime.datetime.now()
     new_urls: list[str] = []
+    resolved_count = 0
+    fallback_count = 0
 
     for language, country, queries in _QUERY_GROUPS:
         client = GNews(
@@ -126,9 +144,14 @@ def main(
 
             added_this_query = 0
             for article in results:
-                url = article.get("url", "").strip()
-                if not url:
+                raw_url = article.get("url", "").strip()
+                if not raw_url:
                     continue
+                url = decode_google_news_url(raw_url)
+                if url != raw_url:
+                    resolved_count += 1
+                elif "news.google.com" in url:
+                    fallback_count += 1
                 if url in seen:
                     continue
                 if _is_blocked(url):
@@ -143,6 +166,11 @@ def main(
                 added_this_query += 1
 
             logger.info(f"[{language}] '{query}' → {added_this_query} new URLs")
+
+    logger.info(
+        f"URL resolution: {resolved_count} resolved, "
+        f"{fallback_count} fell back to Google News tracking URLs"
+    )
 
     if not new_urls:
         logger.info("No new URLs found.")

@@ -42,6 +42,7 @@ requests
 beautifulsoup4
 gnews
 newspaper4k
+googlenewsdecoder
 google-genai
 # --- Editable install ---
 -e .
