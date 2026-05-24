@@ -48,7 +48,7 @@ _VALID_PREDICTION_TYPES = frozenset({
 })
 _VALID_CONFIDENCES = frozenset({"certain", "likely", "possible", "unlikely"})
 
-_MODEL = "gemini-2.0-flash"
+_MODEL = "models/gemini-2.5-flash"
 _MAX_TEXT_CHARS = 12_000
 
 _SYSTEM_PROMPT = (
