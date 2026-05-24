@@ -97,8 +97,8 @@ def decode_google_news_url(url: str) -> str:
     if "news.google.com" not in url:
         return url
     try:
-        from googlenewsdecoder import gnewsdecoder
-        result = gnewsdecoder(url)
+        from googlenewsdecoder import new_decoderv1
+        result = new_decoderv1(url, interval=1)
         if result.get("status") == True and result.get("decoded_url"):  # noqa: E712
             return result["decoded_url"]
     except Exception as e:
