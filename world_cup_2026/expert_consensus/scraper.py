@@ -9,9 +9,9 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-import requests
 from bs4 import BeautifulSoup
 from loguru import logger
+from newspaper import Article
 
 from world_cup_2026.config import DATA_DIR
 
@@ -34,30 +34,25 @@ class PaywallError(Exception):
 def scrape_url(url: str) -> dict:
     """Fetch article text from a URL and save raw text to disk.
 
+    Uses newspaper4k (imported as `newspaper`) which follows Google News
+    redirects internally, resolving CBMi tracking URLs to real article URLs.
+
     Returns:
         dict with keys: url, source_domain, title, date, text, scraped_at
 
     Raises:
         PaywallError: if extracted text has fewer than 200 words.
-        requests.RequestException: on network or HTTP errors.
+        Exception: propagates newspaper/network errors to the pipeline.
     """
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     scraped_at = datetime.now(timezone.utc).isoformat()
 
-    logger.info(f"Scraping: {url}")
-    response = requests.get(url, headers=_HEADERS, timeout=15)
-    response.raise_for_status()
+    article = Article(url, headers=_HEADERS, language="en")
+    article.download()
+    article.parse()
 
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    title_tag = soup.find("title")
-    title = title_tag.get_text(strip=True) if title_tag else ""
-
-    date = _extract_date(soup)
-
-    paragraphs = soup.find_all("p")
-    text = " ".join(p.get_text(separator=" ", strip=True) for p in paragraphs)
-    text = re.sub(r"\s+", " ", text).strip()
+    title = article.title or ""
+    text = re.sub(r"\s+", " ", article.text or "").strip()
 
     word_count = len(text.split())
     if word_count < _MIN_WORDS:
@@ -65,8 +60,19 @@ def scrape_url(url: str) -> dict:
             f"Text too short ({word_count} words) — likely paywalled: {url}"
         )
 
-    parsed = urlparse(url)
-    source_domain = parsed.netloc.removeprefix("www.")
+    # Prefer canonical_link, then newspaper's internally resolved URL, then original
+    resolved_url = article.canonical_link or article.url or url
+    # Guard: if canonical_link still points to Google News, skip it
+    if "news.google.com" in resolved_url:
+        resolved_url = article.url or url
+
+    source_domain = urlparse(resolved_url).netloc.removeprefix("www.")
+
+    if article.publish_date:
+        date = article.publish_date.date().isoformat()
+    else:
+        soup = BeautifulSoup(article.html or "", "html.parser")
+        date = _extract_date(soup)
 
     safe_domain = re.sub(r"[^\w.-]", "_", source_domain)
     raw_path = RAW_DIR / f"{safe_domain}_{date}.txt"
@@ -74,7 +80,7 @@ def scrape_url(url: str) -> dict:
     logger.info(f"Saved raw text → {raw_path}")
 
     return {
-        "url": url,
+        "url": resolved_url,
         "source_domain": source_domain,
         "title": title,
         "date": date,

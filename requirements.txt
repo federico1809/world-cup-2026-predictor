@@ -41,6 +41,7 @@ loguru
 requests
 beautifulsoup4
 gnews
+newspaper4k
 google-genai
 # --- Editable install ---
 -e .
