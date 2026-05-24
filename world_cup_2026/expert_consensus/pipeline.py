@@ -57,7 +57,7 @@ def main(
     urls = [ln.strip() for ln in raw_lines if ln.strip() and not ln.strip().startswith("#")]
     logger.info(f"Total URLs in file: {len(urls)}")
 
-    new_rows: list[dict] = []
+    total_saved: int = 0
 
     for url in urls:
         if url in processed_urls:
@@ -82,18 +82,19 @@ def main(
             continue
 
         extracted_at = datetime.now(timezone.utc).isoformat()
+        rows = []
         for pred in predictions:
             pred["extracted_at"] = extracted_at
-            new_rows.append({col: pred.get(col) for col in _CSV_COLUMNS})
+            rows.append({col: pred.get(col) for col in _CSV_COLUMNS})
 
-    if not new_rows:
-        logger.info("No new predictions to save.")
-        return
+        df_chunk = pd.DataFrame(rows, columns=_CSV_COLUMNS)
+        write_header = not output.exists() or output.stat().st_size == 0
+        df_chunk.to_csv(output, mode="a", header=write_header, index=False)
+        total_saved += len(rows)
+        logger.info(f"Saved {len(rows)} predictions from {url} "
+                    f"(total so far: {total_saved})")
 
-    df_new = pd.DataFrame(new_rows, columns=_CSV_COLUMNS)
-    write_header = not output.exists() or output.stat().st_size == 0
-    df_new.to_csv(output, mode="a", header=write_header, index=False)
-    logger.success(f"Saved {len(df_new)} new predictions → {output}")
+    logger.success(f"Done. Total predictions saved: {total_saved} → {output}")
 
 
 if __name__ == "__main__":
