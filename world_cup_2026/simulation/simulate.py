@@ -222,6 +222,20 @@ def assemble_r32(group_winners, group_runners, best_thirds, third_standings):
     ]
 
 
+def load_expert_signal(csv_path: Path) -> dict[str, float]:
+    """Load expert consensus champion probabilities, normalized to sum to 1."""
+    if not csv_path.exists():
+        logger.warning(f"Expert CSV not found: {csv_path} — skipping blend.")
+        return {}
+    df = pd.read_csv(csv_path)
+    champion_preds = df[df["prediction_type"] == "champion"]
+    counts = champion_preds["team"].value_counts()
+    total = counts.sum()
+    if total == 0:
+        return {}
+    return (counts / total).to_dict()
+
+
 def simulate_tournament_fast():
     groups          = get_groups()
     group_winners   = {}
@@ -298,6 +312,8 @@ def main(
     features_path: Path = Path("models/model_features.json"),
     output_path: Path = Path("outputs/predictions/simulation_results.csv"),
     snapshot_date: str = "2026-03-31",
+    alpha: float = typer.Option(0.3, "--alpha", help="Expert blend weight (0=model only, 1=expert only)."),
+    expert_csv: Path = typer.Option(Path("data/expert_opinions/processed/expert_predictions.csv"), "--expert-csv"),
 ):
     """Run N Monte Carlo simulations of WC2026 and save probability table."""
     global xgb_model, MODEL_FEATURES, df_snapshot, df_teams, all_teams
@@ -384,16 +400,42 @@ def main(
 
     df_results = pd.DataFrame(rows).sort_values("p_champion", ascending=False)
 
+    if alpha > 0:
+        expert_signal = load_expert_signal(expert_csv)
+        if expert_signal:
+            df_results["expert_p_champion"] = df_results["team"].map(
+                expert_signal
+            ).fillna(0.0)
+            df_results["p_champion_blended"] = (
+                (1 - alpha) * df_results["p_champion"]
+                + alpha * df_results["expert_p_champion"]
+            ).round(4)
+            df_results = df_results.sort_values(
+                "p_champion_blended", ascending=False
+            )
+            logger.info(
+                f"Expert blend applied — alpha={alpha}, "
+                f"teams with expert signal: {(df_results['expert_p_champion'] > 0).sum()}"
+            )
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df_results.to_csv(output_path, index=False)
     logger.success(f"Results saved → {output_path}")
 
     # ── Print top 10 ──────────────────────────────────────────────────────────
-    print("\nTop 10 — P(Champion):")
-    print(
-        df_results.head(10)[["team", "p_champion", "p_final", "p_sf", "p_r16"]]
-        .to_string(index=False)
-    )
+    if "p_champion_blended" in df_results.columns:
+        print("\nTop 10 — P(Champion) blended:")
+        print(
+            df_results.head(10)[
+                ["team", "p_champion_blended", "p_champion", "expert_p_champion"]
+            ].to_string(index=False)
+        )
+    else:
+        print("\nTop 10 — P(Champion):")
+        print(
+            df_results.head(10)[["team", "p_champion", "p_final", "p_sf", "p_r16"]]
+            .to_string(index=False)
+        )
 
 
 if __name__ == "__main__":
