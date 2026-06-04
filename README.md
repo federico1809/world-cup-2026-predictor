@@ -74,8 +74,14 @@ dashboard + static notebook visualizations.
     │   │   └── h2h.py                Head-to-head + transitive features
     │   ├── modeling/
     │   │   └── train.py              XGBoost training script
-    │   └── simulation/
-    │       └── simulate.py           Monte Carlo simulation engine
+    │   ├── simulation/
+    │   │   └── simulate.py           Monte Carlo simulation engine
+    │   └── expert_consensus/
+    │       ├── news_scraper.py       Auto-discovers URLs via Google News (17 queries EN/ES/FR)
+    │       ├── scraper.py            Fetches and parses article text (newspaper4k)
+    │       ├── extractor.py          Structured extraction via Gemini 2.5-flash
+    │       ├── pipeline.py           Orchestrates scraper + extractor, writes CSV
+    │       └── analyze.py            Expert consensus vs model comparison
     └── tests/
 
 ---
@@ -188,6 +194,51 @@ dashboard + static notebook visualizations.
 *Full results in `outputs/predictions/simulation_results.csv`*
 
 ---
+## 🗞️ Expert Consensus Module
+
+Automatically discovers, scrapes, and extracts structured predictions 
+from football journalists and analysts across EN/ES/FR sources, 
+then blends the resulting signal into the Monte Carlo simulation.
+
+### How it works
+1. `news_scraper.py` queries Google News with 17 queries across 3 languages,
+   resolves tracking URLs to real article URLs via `googlenewsdecoder`
+2. `scraper.py` fetches and cleans article text using newspaper4k
+3. `extractor.py` calls Gemini 2.5-flash to extract structured predictions
+   (team, prediction_type, confidence, sentiment, quote)
+4. `pipeline.py` orchestrates the above, writes incrementally to CSV
+   (safely resumable — already-processed URLs are skipped)
+5. `analyze.py` compares expert consensus vs XGBoost model output
+6. `simulate.py` blends both signals: `p_blended = (1-α) × p_model + α × p_expert`
+
+### Current status
+- **978 predictions** extracted from **39 sources**
+- **48 teams** covered
+- Spearman ρ = 0.63 (model vs expert consensus)
+
+### Expert consensus top 5 (p_champion)
+| Team | Expert | Model | Blended (α=0.3) |
+|------|--------|-------|-----------------|
+| Spain | 23.2% | 4.1% | 9.8% |
+| France | 11.6% | 3.4% | 5.9% |
+| Argentina | 12.1% | 4.1% | 6.5% |
+| England | 10.1% | 3.0% | 5.1% |
+| Brazil | 9.2% | 2.1% | 4.2% |
+
+### Usage
+    # Step 1 — populate urls.txt (run once, or to refresh)
+    python -m world_cup_2026.expert_consensus.news_scraper
+
+    # Step 2 — extract predictions (resumable, ~20 URLs/day on free Gemini tier)
+    python -m world_cup_2026.expert_consensus.pipeline
+
+    # Step 3 — compare expert vs model
+    python -m world_cup_2026.expert_consensus.analyze
+
+    # Step 4 — simulate with blend (alpha=0 for model-only)
+    python -m world_cup_2026.simulation.simulate --alpha 0.3
+
+---
 
 ## 📈 EDA Key Findings
 
@@ -217,7 +268,7 @@ dashboard + static notebook visualizations.
     python -m world_cup_2026.features.build_features   # ~17 min — builds master_features.parquet
     python -m world_cup_2026.features.build_snapshot   # ~11 sec — builds team_snapshot_clustered.parquet
     python -m world_cup_2026.modeling.train             # ~5 min  — trains XGBoost model
-    python -m world_cup_2026.simulation.simulate        # ~12 min — runs 10k Monte Carlo simulations
+    python -m world_cup_2026.simulation.simulate        # ~14 min — runs 10k Monte Carlo simulations + expert blend
 
 ### Run the dashboard
 
@@ -246,6 +297,8 @@ Or visit the live version: [world-cup-2026-predictor-board.streamlit.app](https:
 | Monte Carlo simulation (10,000 runs) | ✅ Done |
 | Streamlit dashboard (deployed) | ✅ Done |
 | Notebook-free pipeline (build_features + build_snapshot) | ✅ Done |
+| Expert consensus module (news scraper + extractor + pipeline) | ✅ Done |
+| Expert consensus blend in simulation (--alpha param) | ✅ Done |
 | MLP / Stacking Ensemble | ⏳ Pending |
 | Mid-tournament retraining | ⏳ Pending |
 
