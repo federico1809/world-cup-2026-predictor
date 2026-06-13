@@ -176,20 +176,23 @@ dashboard + static notebook visualizations.
 
 ---
 
-## 🏆 Current Tournament Predictions (10,000 simulations)
+## 🏆 Final Pre-Tournament Predictions (June 5, 2026)
 
-| # | Team | P(R16) | P(QF) | P(SF) | P(Final) | P(Champion) |
-|---|------|--------|-------|-------|----------|-------------|
-| 1 | Croatia | 14.85% | 12.74% | 2.29% | 3.56% | 4.33% |
-| 2 | Argentina | 17.58% | 9.56% | 1.96% | 3.41% | 4.28% |
-| 3 | Spain | 19.27% | 9.91% | 2.26% | 3.24% | 3.69% |
-| 4 | Uruguay | 18.60% | 10.04% | 2.19% | 2.65% | 3.48% |
-| 5 | Switzerland | 24.51% | 9.22% | 2.31% | 2.54% | 3.36% |
-| 6 | France | 15.79% | 11.76% | 3.47% | 3.07% | 3.35% |
-| 7 | Colombia | 15.19% | 9.06% | 2.33% | 2.71% | 3.22% |
-| 8 | Portugal | 11.75% | 8.11% | 1.82% | 2.37% | 3.18% |
-| 9 | England | 15.53% | 8.88% | 2.21% | 2.61% | 2.86% |
-| 10 | Belgium | 20.01% | 8.53% | 1.45% | 2.36% | 2.82% |
+10,000 Monte Carlo simulations blended with expert consensus (α=0.3).
+This is the locked-in prediction before kickoff.
+
+| # | Team | Model | Expert Consensus | Blended P(Champion) |
+|---|------|-------|-------------------|----------------------|
+| 1 | Spain | 4.08% | 25.21% | 10.42% |
+| 2 | Argentina | 4.06% | 12.81% | 6.68% |
+| 3 | France | 3.43% | 11.98% | 6.00% |
+| 4 | England | 2.99% | 10.33% | 5.19% |
+| 5 | Portugal | 2.86% | 7.44% | 4.23% |
+| 6 | Brazil | 2.06% | 8.68% | 4.05% |
+| 7 | Croatia | 4.36% | 0.83% | 3.30% |
+| 8 | Switzerland | 3.70% | 0.83% | 2.84% |
+| 9 | Germany | 2.40% | 3.72% | 2.80% |
+| 10 | Uruguay | 3.44% | 1.24% | 2.78% |
 
 *Full results in `outputs/predictions/simulation_results.csv`*
 
@@ -212,18 +215,22 @@ then blends the resulting signal into the Monte Carlo simulation.
 6. `simulate.py` blends both signals: `p_blended = (1-α) × p_model + α × p_expert`
 
 ### Current status
-- **978 predictions** extracted from **39 sources**
+- **1,090 predictions** extracted from **85 sources**
 - **48 teams** covered
-- Spearman ρ = 0.63 (model vs expert consensus)
+- Spearman ρ = 0.668 (model vs expert consensus)
 
-### Expert consensus top 5 (p_champion)
-| Team | Expert | Model | Blended (α=0.3) |
-|------|--------|-------|-----------------|
-| Spain | 23.2% | 4.1% | 9.8% |
-| France | 11.6% | 3.4% | 5.9% |
-| Argentina | 12.1% | 4.1% | 6.5% |
-| England | 10.1% | 3.0% | 5.1% |
-| Brazil | 9.2% | 2.1% | 4.2% |
+### Where model and experts disagree most
+
+| Team | Model rank | Expert rank | Δ |
+|------|-----------|--------------|---|
+| Brazil | 22 | 5 | +17 |
+| Croatia | 1 | 17 | −16 |
+| Switzerland | 4 | 17 | −13 |
+| Germany | 16 | 7 | +9 |
+
+The model — trained purely on historical results — undervalues Brazil
+(coaching change, squad renewal) and overvalues Croatia (aging core
+from the 2018/2022 runs). The blend corrects for both.
 
 ### Usage
     # Step 1 — populate urls.txt (run once, or to refresh)
@@ -301,6 +308,7 @@ Or visit the live version: [world-cup-2026-predictor-board.streamlit.app](https:
 | Expert consensus blend in simulation (--alpha param) | ✅ Done |
 | MLP / Stacking Ensemble | ⏳ Pending |
 | Mid-tournament retraining | ⏳ Pending |
+| Final pre-tournament predictions locked in (June 5, 2026) | ✅ Done |
 
 ---
 
