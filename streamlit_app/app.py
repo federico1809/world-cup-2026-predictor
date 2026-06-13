@@ -178,18 +178,24 @@ def load_simulation() -> pd.DataFrame:
 def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     st.header("Tournament Overview")
 
+    has_blend = "p_champion_blended" in df_sim.columns
+    rank_col = "p_champion_blended" if has_blend else "p_champion"
+
     display_cols = ["team", "p_champion", "p_final", "p_sf", "p_qf", "p_r16", "p_r32"]
+    if has_blend:
+        display_cols = ["team", "p_champion_blended", "p_champion",
+                        "p_final", "p_sf", "p_qf", "p_r16", "p_r32"]
     df = (
         df_sim[display_cols]
         .merge(df_snap[["team", "cluster_name"]], on="team", how="left")
-        .sort_values("p_champion", ascending=False)
+        .sort_values(rank_col, ascending=False)
         .reset_index(drop=True)
     )
 
     # ── Bar chart: top 15 by P(Champion) ─────────────────────────────────────
     top15 = df.head(15).copy()
-    top15["P(Champion) %"] = (top15["p_champion"] * 100).round(1)
-    top15_sorted = top15.sort_values("p_champion", ascending=True)
+    top15["P(Champion) %"] = (top15[rank_col] * 100).round(1)
+    top15_sorted = top15.sort_values(rank_col, ascending=True)
     fig_bar = go.Figure()
     for cluster, color in CLUSTER_COLORS.items():
         subset = top15_sorted[top15_sorted["cluster_name"] == cluster]
@@ -202,8 +208,11 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
             name=cluster,
             marker_color=color,
         ))
+    title = "Top 15 Teams — P(Champion)"
+    if has_blend:
+        title += " (Blended with Expert Consensus)"
     fig_bar.update_layout(
-        title="Top 15 Teams — P(Champion)",
+        title=title,
         legend_title="Cluster",
         height=450,
         yaxis=dict(
@@ -217,9 +226,23 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     # ── Styled table ─────────────────────────────────────────────────────────
     st.subheader("All 48 Teams")
 
-    pct_cols = ["p_champion", "p_final", "p_sf", "p_qf", "p_r16", "p_r32"]
+    RENAME_MAP = {
+        "p_champion_blended": "P(Champion) Blended",
+        "p_champion": "P(Champion) Model",
+        "p_final": "P(Final)",
+        "p_sf": "P(SF)",
+        "p_qf": "P(QF)",
+        "p_r16": "P(R16)",
+        "p_r32": "P(R32)",
+    }
     cluster_series = df["cluster_name"]
-    df_display = df.drop(columns=["cluster_name"]).sort_values("p_champion", ascending=False).reset_index(drop=True)
+    df_display = (
+        df.drop(columns=["cluster_name"])
+        .sort_values(rank_col, ascending=False)
+        .reset_index(drop=True)
+        .rename(columns=RENAME_MAP)
+    )
+    pct_cols = [RENAME_MAP[c] for c in RENAME_MAP if RENAME_MAP[c] in df_display.columns]
 
     def _row_style(row):
         hex_color = CLUSTER_COLORS.get(cluster_series.iloc[row.name], "")
@@ -249,7 +272,9 @@ def page_overview(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
 def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     st.header("Team Deep Dive")
 
-    team_order = df_sim.sort_values("p_champion", ascending=False)["team"].tolist()
+    has_blend = "p_champion_blended" in df_sim.columns
+    rank_col = "p_champion_blended" if has_blend else "p_champion"
+    team_order = df_sim.sort_values(rank_col, ascending=False)["team"].tolist()
     selected   = st.selectbox("Select a team", team_order)
 
     snap = df_snap[df_snap["team"] == selected].iloc[0]
@@ -336,6 +361,12 @@ def page_deep_dive(df_sim: pd.DataFrame, df_snap: pd.DataFrame) -> None:
     fig_prob.update_traces(textposition="outside")
     fig_prob.update_layout(showlegend=False, yaxis_tickformat=".0%", margin=dict(t=40))
     st.plotly_chart(fig_prob, use_container_width=True)
+
+    if "p_champion_blended" in sim.index:
+        st.caption(
+            f"Blended P(Champion) incl. expert consensus: "
+            f"{float(sim['p_champion_blended']):.1%}"
+        )
 
 
 def page_predictor(df_snap: pd.DataFrame, model, model_features: list) -> None:
