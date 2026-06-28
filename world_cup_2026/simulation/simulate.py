@@ -323,6 +323,10 @@ def simulate_from_r32_fast() -> dict[str, str]:
         sf_winners.append(winner)
         sf_losers.append(loser)
 
+    # Mark the two finalists
+    for finalist in sf_winners:
+        phase[finalist] = "Final"
+
     # 3rd place
     third = simulate_knockout_fast(sf_losers[0], sf_losers[1])
     phase[third] = "Third"
