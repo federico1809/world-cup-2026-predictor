@@ -30,6 +30,53 @@ app = typer.Typer()
 
 PHASES = ["Group", "R32", "R16", "QF", "SF", "Third", "Final", "Champion"]
 
+# Real R32 bracket — confirmed June 27 2026
+# Team names must exactly match df_teams["team_name"]
+R32_MATCHUPS: list[tuple[str, str]] = [
+    ("South Africa",       "Canada"),              # M1
+    ("Brazil",             "Japan"),               # M2
+    ("Germany",            "Paraguay"),            # M3
+    ("Netherlands",        "Morocco"),             # M4
+    ("Côte d'Ivoire",      "Norway"),              # M5
+    ("France",             "Sweden"),              # M6
+    ("Mexico",             "Ecuador"),             # M7
+    ("England",            "DR Congo"),            # M8
+    ("USA",                "Bosnia-Herzegovina"),  # M9
+    ("Belgium",            "Senegal"),             # M10
+    ("Colombia",           "Ghana"),               # M11
+    ("Spain",              "Austria"),             # M12
+    ("Switzerland",        "Algeria"),             # M13
+    ("Argentina",          "Cape Verde"),          # M14
+    ("Australia",          "Egypt"),               # M15
+    ("Portugal",           "Croatia"),             # M16
+]
+
+# R16: indices into R32_MATCHUPS — which R32 winners face each other
+R16_PAIRS: list[tuple[int, int]] = [
+    (0,  3),   # W(M1)  vs W(M4)  — SA/Canada vs Netherlands/Morocco
+    (2,  5),   # W(M3)  vs W(M6)  — Germany/Paraguay vs France/Sweden
+    (1,  4),   # W(M2)  vs W(M5)  — Brazil/Japan vs CIV/Norway
+    (12, 13),  # W(M13) vs W(M14) — Switzerland/Algeria vs Argentina/Cape Verde
+    (6,  7),   # W(M7)  vs W(M8)  — Mexico/Ecuador vs England/DR Congo
+    (8,  9),   # W(M9)  vs W(M10) — USA/Bosnia vs Belgium/Senegal
+    (11, 10),  # W(M12) vs W(M11) — Spain/Austria vs Colombia/Ghana
+    (15, 14),  # W(M16) vs W(M15) — Portugal/Croatia vs Australia/Egypt
+]
+
+# QF: indices into R16 winners list
+QF_PAIRS: list[tuple[int, int]] = [
+    (0, 1),  # W(R1) vs W(R2) — Netherlands/France half
+    (2, 3),  # W(R3) vs W(R4) — Brazil/Argentina half
+    (4, 5),  # W(R5) vs W(R6) — England/USA half
+    (6, 7),  # W(R7) vs W(R8) — Spain/Portugal half
+]
+
+# SF: indices into QF winners list
+SF_PAIRS: list[tuple[int, int]] = [
+    (0, 1),  # W(QF1) vs W(QF2) — Half 1: France/Argentina bracket
+    (2, 3),  # W(QF3) vs W(QF4) — Half 2: England/Spain bracket
+]
+
 FORM_WINDOWS = [5, 10, 20]
 FORM_STATS = [
     "win_rate", "draw_rate", "loss_rate",
@@ -236,6 +283,57 @@ def load_expert_signal(csv_path: Path) -> dict[str, float]:
     return (counts / total).to_dict()
 
 
+def simulate_from_r32_fast() -> dict[str, str]:
+    """Simulate tournament from R32 onwards using the confirmed real bracket."""
+    phase = {t: "Group" for t in all_teams}
+
+    # All 32 R32 teams start at R32 phase
+    for home, away in R32_MATCHUPS:
+        phase[home] = "R32"
+        phase[away] = "R32"
+
+    # R32
+    r32_winners = [simulate_knockout_fast(h, a) for h, a in R32_MATCHUPS]
+
+    # R16
+    r16_matchups = [(r32_winners[i], r32_winners[j]) for i, j in R16_PAIRS]
+    r16_winners = []
+    for home, away in r16_matchups:
+        phase[home] = "R16"
+        phase[away] = "R16"
+        r16_winners.append(simulate_knockout_fast(home, away))
+
+    # QF
+    qf_matchups = [(r16_winners[i], r16_winners[j]) for i, j in QF_PAIRS]
+    qf_winners = []
+    for home, away in qf_matchups:
+        phase[home] = "QF"
+        phase[away] = "QF"
+        qf_winners.append(simulate_knockout_fast(home, away))
+
+    # SF
+    sf_matchups = [(qf_winners[i], qf_winners[j]) for i, j in SF_PAIRS]
+    sf_winners = []
+    sf_losers = []
+    for home, away in sf_matchups:
+        phase[home] = "SF"
+        phase[away] = "SF"
+        winner = simulate_knockout_fast(home, away)
+        loser = away if winner == home else home
+        sf_winners.append(winner)
+        sf_losers.append(loser)
+
+    # 3rd place
+    third = simulate_knockout_fast(sf_losers[0], sf_losers[1])
+    phase[third] = "Third"
+
+    # Final
+    champion = simulate_knockout_fast(sf_winners[0], sf_winners[1])
+    phase[champion] = "Champion"
+
+    return phase
+
+
 def simulate_tournament_fast():
     groups          = get_groups()
     group_winners   = {}
@@ -314,6 +412,12 @@ def main(
     snapshot_date: str = "2026-03-31",
     alpha: float = typer.Option(0.3, "--alpha", help="Expert blend weight (0=model only, 1=expert only)."),
     expert_csv: Path = typer.Option(Path("data/expert_opinions/processed/expert_predictions.csv"), "--expert-csv"),
+    from_r32: bool = typer.Option(False, "--from-r32",
+        help="Skip group stage; simulate from real R32 bracket."),
+    r32_output: Path = typer.Option(
+        Path("outputs/predictions/simulation_results_r32.csv"),
+        "--r32-output",
+        help="Output path when using --from-r32."),
 ):
     """Run N Monte Carlo simulations of WC2026 and save probability table."""
     global xgb_model, MODEL_FEATURES, df_snapshot, df_teams, all_teams
@@ -332,6 +436,19 @@ def main(
     df_teams = df_teams[~df_teams["is_placeholder"]].reset_index(drop=True)
     all_teams = df_teams["team_name"].tolist()
     logger.info(f"Teams loaded: {len(all_teams)}")
+
+    if from_r32:
+        unknown = [
+            t for pair in R32_MATCHUPS for t in pair
+            if t not in all_teams
+        ]
+        if unknown:
+            logger.error(
+                f"--from-r32: these team names are not in df_teams: {unknown}. "
+                "Fix R32_MATCHUPS to use exact names from teams.csv."
+            )
+            raise typer.Exit(1)
+        logger.info("R32 bracket validated — all 32 team names found.")
 
     # ── Build snapshot ────────────────────────────────────────────────────────
     SNAPSHOT_DATE = pd.Timestamp(snapshot_date)
@@ -380,24 +497,27 @@ def main(
     logger.info(f"Precomputed {len(MATCH_PROBS):,} matchups")
 
 
-    # ── Run simulations ───────────────────────────────────────────────────────
+    # ── Determine effective output path ───────────────────────────────────────
+    effective_output = r32_output if from_r32 else output_path
+
+    # ── Run simulations ────────────────────────────────────────────────────────
+    sim_fn = simulate_from_r32_fast if from_r32 else simulate_tournament_fast
+    mode_label = "from R32 (real bracket)" if from_r32 else "full tournament"
+    logger.info(f"Running {n_sims:,} simulations [{mode_label}]...")
     counts = {t: {p: 0 for p in PHASES} for t in all_teams}
-    logger.info(f"Running {n_sims:,} simulations...")
-
     for _ in tqdm(range(n_sims)):
-        result = simulate_tournament_fast()
-        for team, phase in result.items():
-            if team in counts and phase in counts[team]:
-                counts[team][phase] += 1
+        result = sim_fn()
+        for team, phase_reached in result.items():
+            if team in counts and phase_reached in counts[team]:
+                counts[team][phase_reached] += 1
 
-    # ── Build results table ───────────────────────────────────────────────────
+    # ── Build results table ────────────────────────────────────────────────────
     rows = []
     for team in all_teams:
         row = {"team": team}
         for phase in PHASES:
             row[f"p_{phase.lower()}"] = round(counts[team][phase] / n_sims, 4)
         rows.append(row)
-
     df_results = pd.DataFrame(rows).sort_values("p_champion", ascending=False)
 
     if alpha > 0:
@@ -418,9 +538,9 @@ def main(
                 f"teams with expert signal: {(df_results['expert_p_champion'] > 0).sum()}"
             )
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df_results.to_csv(output_path, index=False)
-    logger.success(f"Results saved → {output_path}")
+    effective_output.parent.mkdir(parents=True, exist_ok=True)
+    df_results.to_csv(effective_output, index=False)
+    logger.success(f"Results saved → {effective_output}")
 
     # ── Print top 10 ──────────────────────────────────────────────────────────
     if "p_champion_blended" in df_results.columns:
